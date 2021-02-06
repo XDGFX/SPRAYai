@@ -40,24 +40,29 @@ CATEGORIES = [
     }
 ]
 
+
 def filter_for_jpeg(root, files):
     file_types = ['*.png', '*.jpeg', '*.jpg']
     file_types = r'|'.join([fnmatch.translate(x) for x in file_types])
     files = [os.path.join(root, f) for f in files]
     files = [f for f in files if re.match(file_types, f)]
-    
+
     return files
+
 
 def filter_for_annotations(root, files, image_filename):
     file_types = ['*.png', '*.jpeg', '*.jpg']
     file_types = r'|'.join([fnmatch.translate(x) for x in file_types])
-    basename_no_extension = os.path.splitext(os.path.basename(image_filename))[0]
+    basename_no_extension = os.path.splitext(
+        os.path.basename(image_filename))[0]
     file_name_prefix = basename_no_extension + '.*'
     files = [os.path.join(root, f) for f in files]
     files = [f for f in files if re.match(file_types, f)]
-    files = [f for f in files if re.match(file_name_prefix, os.path.splitext(os.path.basename(f))[0])]
+    files = [f for f in files if re.match(
+        file_name_prefix, os.path.splitext(os.path.basename(f))[0])]
 
     return files
+
 
 def main():
 
@@ -71,7 +76,7 @@ def main():
 
     image_id = 1
     segmentation_id = 1
-    
+
     # filter for jpeg images
     for root, _, files in os.walk(IMAGE_DIR):
         image_files = filter_for_jpeg(root, files)
@@ -85,18 +90,21 @@ def main():
 
             # filter for associated png annotations
             for root, _, files in os.walk(ANNOTATION_DIR):
-                annotation_files = filter_for_annotations(root, files, image_filename)
+                annotation_files = filter_for_annotations(
+                    root, files, image_filename)
 
                 # go through each associated annotation
                 for annotation_filename in annotation_files:
-                    
-                    print(annotation_filename)
-                    class_id = [x['id'] for x in CATEGORIES if x['name'] in annotation_filename][0]
 
-                    category_info = {'id': class_id, 'is_crowd': 'crowd' in image_filename}
+                    print(annotation_filename)
+                    class_id = [
+                        x['id'] for x in CATEGORIES if x['name'] in annotation_filename][0]
+
+                    category_info = {'id': class_id,
+                                     'is_crowd': 'crowd' in image_filename}
                     binary_mask = np.asarray(Image.open(annotation_filename)
-                        .convert('1')).astype(np.uint8)
-                    
+                                             .convert('1')).astype(np.uint8)
+
                     annotation_info = pycococreatortools.create_annotation_info(
                         segmentation_id, image_id, category_info, binary_mask,
                         image.size, tolerance=2)
