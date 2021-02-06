@@ -12,7 +12,7 @@ from pycococreatortools import pycococreatortools
 ROOT_DIR = 'train'
 CATEGORY = 'plants'
 YEAR = 2021
-IMAGE_DIR = os.path.join(ROOT_DIR, f"{CATEGORY}_train{YEAR}")
+IMAGE_DIR = os.path.join(ROOT_DIR, f"{CATEGORY}_{ROOT_DIR}{YEAR}")
 ANNOTATION_DIR = os.path.join(ROOT_DIR, "annotations")
 
 INFO = {
