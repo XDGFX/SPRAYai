@@ -9,11 +9,12 @@ from PIL import Image
 import numpy as np
 from pycococreatortools import pycococreatortools
 
-ROOT_DIR = 'train'
+ROOT_DIR = 'dandelions_v2'
+SUB_DIR = 'train'
 CATEGORY = 'plants'
 YEAR = 2021
-IMAGE_DIR = os.path.join(ROOT_DIR, f"{CATEGORY}_{ROOT_DIR}{YEAR}")
-ANNOTATION_DIR = os.path.join(ROOT_DIR, "annotations")
+IMAGE_DIR = os.path.join(ROOT_DIR, SUB_DIR, f"{CATEGORY}_{SUB_DIR}{YEAR}")
+ANNOTATION_DIR = os.path.join(ROOT_DIR, SUB_DIR, "annotations")
 
 INFO = {
     "description": "Synthetic Dandelions Dataset",
@@ -116,7 +117,7 @@ def main():
 
             image_id = image_id + 1
 
-    with open(os.path.join(ROOT_DIR, f'instances_{CATEGORY}_{ROOT_DIR}{YEAR}.json'), 'w') as output_json_file:
+    with open(os.path.join(ROOT_DIR, SUB_DIR, f'instances_{CATEGORY}_{SUB_DIR}{YEAR}.json'), 'w') as output_json_file:
         json.dump(coco_output, output_json_file)
 
 
