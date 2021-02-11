@@ -142,3 +142,5 @@ cython_debug/
 
 # Large files
 datasets/
+**/dandelions_v3
+output/

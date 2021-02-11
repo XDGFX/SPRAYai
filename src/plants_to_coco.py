@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
 import datetime
+import fnmatch
 import json
 import os
 import re
-import fnmatch
-from PIL import Image
+
 import numpy as np
+from PIL import Image
+
 from pycococreatortools import pycococreatortools
 
-ROOT_DIR = 'dandelions_v2'
+ROOT_DIR = 'datasets/dandelions_v3'
 SUB_DIR = 'train'
 CATEGORY = 'plants'
 YEAR = 2021
@@ -36,7 +38,12 @@ LICENSES = [
 CATEGORIES = [
     {
         'id': 1,
-        'name': 'dandelion',
+        'name': 'dandelion_leaves',
+        'supercategory': 'plants',
+    },
+    {
+        'id': 2,
+        'name': 'dandelion_flower',
         'supercategory': 'plants',
     }
 ]
