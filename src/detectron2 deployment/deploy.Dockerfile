@@ -42,7 +42,7 @@ RUN pip install onnx==1.8.1
 RUN sudo apt-get install vim --yes
 
 # Copy latest dataset for Caffe2 validation
-RUN mkdir /home/appuser/detectron2_repo/datasets/dandelions_v3
+RUN mkdir -p /home/appuser/detectron2_repo/datasets/dandelions_v3
 COPY dandelions_v3 /home/appuser/detectron2_repo/datasets/dandelions_v3
 COPY dandelions_v3.yaml /home/appuser/detectron2_repo/configs
 COPY export_model.py /home/appuser/detectron2_repo/tools/deploy
