@@ -28,12 +28,6 @@ RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.6 1
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 2
 RUN pip3 install numpy pillow yolo-v4 flask
 
-# Copy custom files
-COPY . .
-# COPY test test
-# COPY real real
-# COPY yolov4-tiny.weights yolov4-tiny.weights
-# COPY yolov4-tiny.cfg yolov4-tiny.cfg
-
-# Run with
-# ./darknet detect yolov4-tiny.cfg yolov4-tiny.weights test/1003.jpg
+# Get model
+RUN wget -O "yolov4-tiny.cfg" "https://github.com/XDGFX/navvy-spray-ai/releases/download/4.0/custom-yolov4-tiny-detector.cfg"
+RUN wget -O "yolov4-tiny.weights" "https://github.com/XDGFX/navvy-spray-ai/releases/download/4.0/custom-yolov4-tiny-detector_best_4000.weights"
