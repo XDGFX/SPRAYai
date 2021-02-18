@@ -1,117 +1,97 @@
+#!/usr/bin/env python3
+
+"""
+detect.py
+
+Python integration of the YOLOv4 darknet object detection.
+Designed to work as part of an API webserver, returning a JSON response.
+
+Callum Morrison, 2021
+"""
+
+import json
+
 import cv2
-import argparse
 import numpy as np
 
-# handle command line arguments
-ap = argparse.ArgumentParser()
-ap.add_argument('-i', '--image', required=True,
-                help = 'path to input image')
-ap.add_argument('-c', '--config', required=True,
-                help = 'path to yolo config file')
-ap.add_argument('-w', '--weights', required=True,
-                help = 'path to yolo pre-trained weights')
-ap.add_argument('-cl', '--classes', required=True,
-                help = 'path to text file containing class names')
-args = ap.parse_args()
+config_file = "yolov4-tiny.cfg"
+weights_file = "yolov4-tiny.weights"
+conf_threshold = 0.5    # Required confidence score for response
+nms_threshold = 0.4     # Non maximal supression threshold
 
-# read input image
-image = cv2.imread(args.image)
 
-Width = image.shape[1]
-Height = image.shape[0]
-scale = 0.00392
+class Detector():
+    """
+    Main Detector class.
+    Initialises by loading the neural network and configuring variables.
+    """
 
-# read class names from text file
-classes = None
-with open(args.classes, 'r') as f:
-    classes = [line.strip() for line in f.readlines()]
+    def __init__(self):
+        """
+        Loads the model into the class, speeding up inference.
+        """
 
-# generate different colors for different classes
-COLORS = np.random.uniform(0, 255, size=(len(classes), 3))
+        self.net = cv2.dnn.readNet(weights_file, config_file)
 
-# read pre-trained model and config file
-net = cv2.dnn.readNet(args.weights, args.config)
+    def get_output_layers(self, net):
+        """
+        Retreive the output layer names in the architecture.
+        """
 
-# create input blob
-blob = cv2.dnn.blobFromImage(image, scale, (416,416), (0,0,0), True, crop=False)
+        layer_names = net.getLayerNames()
 
-# set input blob for the network
-net.setInput(blob)
+        output_layers = [layer_names[i[0] - 1]
+                         for i in net.getUnconnectedOutLayers()]
 
-# function to get the output layer names
-# in the architecture
-def get_output_layers(net):
+        return output_layers
 
-    layer_names = net.getLayerNames()
+    def bbox(self, image):
+        """
+        Detect objects within the supplied image, and return their bounding boxes.
+        """
+        Width = image.shape[1]
+        Height = image.shape[0]
+        scale = 0.00392
 
-    output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+        # Create input blob
+        blob = cv2.dnn.blobFromImage(
+            image, scale, (416, 416), (0, 0, 0), True, crop=False)
 
-    return output_layers
+        # Set input blob for the network
+        self.net.setInput(blob)
 
-# function to draw bounding box on the detected object with class name
-def draw_bounding_box(img, class_id, confidence, x, y, x_plus_w, y_plus_h):
+        # Run inference
+        outs = self.net.forward(self.get_output_layers(self.net))
 
-    label = str(classes[class_id])
+        # Initialisation
+        class_ids = []
+        confidences = []
+        boxes = []
 
-    color = COLORS[class_id]
+        # Loop over each detection
+        for out in outs:
+            for detection in out:
 
-    cv2.rectangle(img, (x,y), (x_plus_w,y_plus_h), color, 2)
+                # Collect confidence for checking
+                scores = detection[5:]
+                class_id = np.argmax(scores)
+                confidence = scores[class_id]
 
-    cv2.putText(img, label, (x-10,y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                # Ignore weak detections
+                if confidence > conf_threshold:
+                    center_x = int(detection[0] * Width)
+                    center_y = int(detection[1] * Height)
+                    w = int(detection[2] * Width)
+                    h = int(detection[3] * Height)
+                    x = center_x - w / 2
+                    y = center_y - h / 2
+                    class_ids.append(class_id)
+                    confidences.append(float(confidence))
+                    boxes.append([x, y, w, h])
 
-# run inference through the network
-# and gather predictions from output layers
-outs = net.forward(get_output_layers(net))
+        # Apply non-maximal suppression
+        indices = cv2.dnn.NMSBoxes(
+            boxes, confidences, conf_threshold, nms_threshold)
+        output = [boxes[i[0]] for i in indices]
 
-# initialization
-class_ids = []
-confidences = []
-boxes = []
-conf_threshold = 0.5
-nms_threshold = 0.4
-
-# for each detetion from each output layer 
-# get the confidence, class id, bounding box params
-# and ignore weak detections (confidence < 0.5)
-for out in outs:
-    for detection in out:
-        scores = detection[5:]
-        class_id = np.argmax(scores)
-        confidence = scores[class_id]
-        if confidence > 0.5:
-            center_x = int(detection[0] * Width)
-            center_y = int(detection[1] * Height)
-            w = int(detection[2] * Width)
-            h = int(detection[3] * Height)
-            x = center_x - w / 2
-            y = center_y - h / 2
-            class_ids.append(class_id)
-            confidences.append(float(confidence))
-            boxes.append([x, y, w, h])
-
-# apply non-max suppression
-indices = cv2.dnn.NMSBoxes(boxes, confidences, conf_threshold, nms_threshold)
-
-# go through the detections remaining
-# after nms and draw bounding box
-for i in indices:
-    i = i[0]
-    box = boxes[i]
-    x = box[0]
-    y = box[1]
-    w = box[2]
-    h = box[3]
-    
-    draw_bounding_box(image, class_ids[i], confidences[i], round(x), round(y), round(x+w), round(y+h))
-
-# display output image    
-#cv2.imshow("object detection", image)
-
-# wait until any key is pressed
-#cv2.waitKey()
-    
- # save output image to disk
-cv2.imwrite("object-detection.jpg", image)
-
-# release resources
-#cv2.destroyAllWindows()
+        return json.dumps(output)
