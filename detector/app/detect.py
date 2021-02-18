@@ -33,6 +33,10 @@ class Detector():
 
         self.net = cv2.dnn.readNet(weights_file, config_file)
 
+        # Specify to use CUDA
+        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+
     def get_output_layers(self, net):
         """
         Retreive the output layer names in the architecture.

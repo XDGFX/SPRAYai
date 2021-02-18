@@ -25,11 +25,22 @@ img = cv2.imread('detector/test.jpg')
 # encode image as jpeg
 _, img_encoded = cv2.imencode('.jpg', img)
 # send http request with image and receive response
-start_time = time.time()
-response = requests.post(
-    test_url, data=img_encoded.tostring(), headers=headers)
-print(f"Inference performed in {(time.time() - start_time) * 1000}ms")
-# decode response
-print(json.loads(response.text))
+
+counter = 0
+average_time = 0
+
+while True:
+    start_time = time.time()
+    response = requests.post(
+        test_url, data=img_encoded.tostring(), headers=headers)
+    duration = round((time.time() - start_time) * 1000)
+    print(f"Inference performed in {duration}ms")
+    print(json.loads(response.text))
+
+    average_time = round((counter * average_time + duration) / (counter + 1))
+    print(f"Average: {average_time}ms")
+
+    counter += 1
+    # decode response
 
 # expected output: {u'message': u'image received. size=124x124'}
