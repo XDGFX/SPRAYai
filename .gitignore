@@ -143,7 +143,7 @@ cython_debug/
 
 # Large files
 datasets/
-**/dandelions_v3
+**/dandelions_3.0
 
 # Redis database
 *.rdb
