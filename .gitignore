@@ -107,6 +107,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv-linux
 env/
 venv/
 ENV/
@@ -143,3 +144,6 @@ cython_debug/
 # Large files
 datasets/
 **/dandelions_v3
+
+# Redis database
+*.rdb
