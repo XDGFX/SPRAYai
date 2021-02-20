@@ -49,7 +49,7 @@ class Detector():
 
         return output_layers
 
-    def bbox(self, image):
+    def bounding_box(self, image, visualise=False):
         """
         Detect objects within the supplied image, and return their bounding boxes.
         """
@@ -96,6 +96,25 @@ class Detector():
         # Apply non-maximal suppression
         indices = cv2.dnn.NMSBoxes(
             boxes, confidences, conf_threshold, nms_threshold)
-        output = [boxes[i[0]] for i in indices]
 
-        return json.dumps(output)
+        if not visualise:
+            output = [boxes[i[0]] for i in indices]
+
+            return json.dumps(output)
+        else:
+            # Draw a bounding box around each detection on the original image.
+            # Used for debugging, as only the image is returned.
+            colour = (255, 0, 0)
+
+            for i in indices:
+                i = i[0]
+                box = boxes[i]
+                x = round(box[0])
+                y = round(box[1])
+                w = round(box[2])
+                h = round(box[3])
+
+                cv2.rectangle(image, (x, y), (x+w, y+h), colour, 2)
+                # cv2.putText(image, class_ids[i], (x-10, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 2)
+
+            return image
