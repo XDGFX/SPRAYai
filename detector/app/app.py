@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-app.py
+detector/app.py
 
 Flask-based API webserver to handle inference requests for object detection.
 

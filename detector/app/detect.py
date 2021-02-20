@@ -104,7 +104,7 @@ class Detector():
         else:
             # Draw a bounding box around each detection on the original image.
             # Used for debugging, as only the image is returned.
-            colour = (255, 0, 0)
+            colour = (0, 0, 255)
 
             for i in indices:
                 i = i[0]
