@@ -100,7 +100,7 @@ class Detector():
         if not visualise:
             output = [boxes[i[0]] for i in indices]
 
-            return json.dumps(output)
+            return output
         else:
             # Draw a bounding box around each detection on the original image.
             # Used for debugging, as only the image is returned.

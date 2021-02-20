@@ -21,7 +21,7 @@ DEBUG = False
 
 # ------------------------------------------------
 
-addr = 'http://192.168.0.27:5050/'
+addr = 'http://192.168.0.27:5050'
 test_url = addr + '/api/detect'
 
 if DEBUG:

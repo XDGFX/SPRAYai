@@ -13,7 +13,8 @@ ENV DEBIAN_FRONTEND noninteractive
 # Remove Nvidia ppa which caused apt update to fail
 RUN mv /etc/apt/sources.list.d/nvidia-l4t-apt-source.list .
 
-RUN apt-get update && apt-get install -y wget git ca-certificates build-essential software-properties-common vim sudo
+RUN apt-get update && apt-get install -y wget git ca-certificates build-essential software-properties-common vim sudo python3-dev
+
 
 # # Setup Python
 # RUN add-apt-repository ppa:deadsnakes/ppa
@@ -28,8 +29,7 @@ RUN python3 get-pip.py --force-reinstall
 # Install dependencies
 RUN pip3 install flask
 
-# Copy webserver files
-COPY app /app
+RUN mkdir /app
 WORKDIR /app
 
 # Get model
@@ -37,6 +37,9 @@ RUN wget -O "yolov4-tiny.cfg" "https://github.com/XDGFX/navvy-spray-ai/releases/
 RUN wget -O "yolov4-tiny.weights" "https://github.com/XDGFX/navvy-spray-ai/releases/download/4.0/custom-yolov4-tiny-detector_best_4000.weights"
 
 EXPOSE 5050
+
+# Copy webserver files
+COPY app/* /app/
 
 # Start the webserver
 CMD python3 app.py

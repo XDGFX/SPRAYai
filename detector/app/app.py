@@ -10,7 +10,7 @@ Callum Morrison, 2021
 
 import cv2
 import numpy as np
-from flask import Flask, Response, abort, request
+from flask import Flask, Response, abort, jsonify, request
 
 from detect import Detector
 
@@ -32,7 +32,10 @@ def detect():
 
     data = nn.bounding_box(img)
 
-    return Response(response=data, status=200, mimetype='application/json')
+    return jsonify({
+        "bounding_boxes": data,
+        "count": len(data)
+    })
 
 @app.route('/api/detect/debug', methods=['POST'])
 def detect_debug():
