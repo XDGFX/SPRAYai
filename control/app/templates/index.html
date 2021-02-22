@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href='/static/style.css'>
+    <script src="https://cdn.socket.io/3.1.1/socket.io.min.js"
+        integrity="sha384-gDaozqUvc4HTgo8iZjwth73C6dDDeOJsAgpxBcMpZYztUfjHXpzrpdrHRdVp8ySO"
+        crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <button onclick='socket.emit("emit", {"cmd": "spray_enable", "namespace": "pi"})'>Start spraying</button>
+    <button onclick='socket.emit("emit", {"cmd": "spray_disable", "namespace": "pi"})'>Stop spraying</button>
+
+    <script type="text/javascript" charset="utf-8">
+        url = "http://192.168.0.27:5040"
+
+        const socket = io('/host');
+        socket.on('connect', function () {
+            console.log('Connected to WebSocket server!')
+        });
+
+        socket.on('my response', data => {
+            console.log(data);
+        });
+    </script>
+
+
+</body>
+
+</html>
