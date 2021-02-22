@@ -14,12 +14,12 @@ import socket
 import time
 from pathlib import Path
 from threading import Thread
-
 import socketio
 from dotenv import load_dotenv
 
 import logs
 import vision
+from spray import print_movement
 
 # Setup log
 log = logs.create_log(__name__)
@@ -28,14 +28,15 @@ log = logs.create_log(__name__)
 env_path = Path(__file__).parent.absolute() / '.env'
 load_dotenv(dotenv_path=env_path)
 
+inference_wait = 1 / float(os.getenv('FRAMERATE_INFERENCE'))
+
 sio = socketio.Client()
 
 # Initialise spraying queue
 spray = queue.Queue(maxsize=1)
 
+
 # --- SOCKETIO CONNECTION EVENTS ---
-
-
 @sio.event(namespace='/pi')
 def connect():
     log.info("Connected to host!")
@@ -65,10 +66,8 @@ def disconnect():
 
 
 # --- SOCKETIO CUSTOM EVENTS ---
-
 @sio.event(namespace='/pi')
 def spray_enable():
-
     # Check if already spraying
     if len(spray.queue):
         log.info('Already spraying!')
@@ -81,8 +80,47 @@ def spray_enable():
     # Put something in the queue to trigger spraying
     spray.put(True)
 
+    start_spraying()
+
+
+@sio.event(namespace='/pi')
+def spray_disable():
+    stop_spraying()
+
+
+# --- MAIN FUNCTIONS ---
+def connect_to_host():
+    """
+    Attempt to connect to the host device.
+    """
+
+    connection_attempts = 0
+    connected = False
+
+    while not connected:
+        try:
+            # Connect to the /pi namespace for Pi specific commands
+            sio.connect(os.getenv('HOST_URL'), namespaces='/pi')
+            connected = True
+
+        except Exception as e:
+            connection_attempts += 1
+            log.error(e)
+            log.warning(
+                f'Unable to connect to the WebSocket server at {os.getenv("HOST_URL")}')
+            log.warning(
+                f'Attempting to reconnect (Attempt: {connection_attempts})')
+
+            time.sleep(1)
+
+
+def start_spraying():
+    """
+    Main logic for overall spray program.
+    """
+
     # Initialise camera
-    cam = vision.Camera()
+    cam = vision.Camera(sid=sio.get_sid(namespace='/pi'))
 
     # Enable frame capture
     t_cap = Thread(target=cam.start_capture)
@@ -107,43 +145,30 @@ def spray_enable():
         # Perform inference
         bbox = vision.get_inference(cam.first_frame)
 
-        # Check if any detections were made
-        if bbox['count'] == 0:
-            log.info('No detections found! Not bothering to continue this frame.')
-
-            # # Terminate video stream
-            # cam.active = False
-
-            # # Wait for camera thread to terminate
-            # t_cap.join()
-
-            # # Wait for track thread to terminate
-            # t_track.join()
-
-            # Wait until next frame should be captured
-            frame_wait = 1 / float(os.getenv('FRAMERATE_INFERENCE'))
-            log.info(f'Waiting {frame_wait}s')
-            time.sleep(frame_wait - ((time.time() - start_time) % frame_wait))
-
+        # Check that the request was successful
+        if bbox is None:
             continue
 
-        r = vision.get_plants()
+        # Check if any detections were made
+        # if bbox['count'] == 0:
+        #     log.info('No detections found! Not bothering to continue this frame.')
 
+        #     # Wait until next frame should be captured
+        #     time.sleep(inference_wait -
+        #                ((time.time() - start_time) % inference_wait))
 
-@sio.event(namespace='/pi')
-def spray_disable():
-    stop_spraying()
+        #     continue
 
-    # --- MAIN FUNCTIONS ---
+        print_movement(sid=sio.get_sid(namespace='/pi'))
 
+    # Terminate video stream
+    cam.active = False
 
-def connect_to_host():
-    """
-    Attempt to connect to the host device.
-    """
+    # Wait for camera thread to terminate
+    t_cap.join()
 
-    # Connect to the /pi namespace for Pi specific commands
-    sio.connect(os.getenv('HOST_URL'), namespaces='/pi')
+    # Wait for track thread to terminate
+    t_track.join()
 
 
 def stop_spraying():

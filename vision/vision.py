@@ -9,12 +9,14 @@ Callum Morrison, 2021
 
 import json
 import os
+import re
 import time
 from pathlib import Path
 from queue import Queue
 
 import cv2
 import numpy as np
+import redis
 import requests
 from dotenv import load_dotenv
 
@@ -27,14 +29,21 @@ log = logs.create_log(__name__)
 env_path = Path(__file__).parent.absolute() / '.env'
 load_dotenv(dotenv_path=env_path)
 
+# Initialise Redis
+redis_url = re.match('([\d./:\w]+):([\d]+)',
+                     os.environ.get('REDIS_URL')).groups()
+r = redis.Redis(host=redis_url[0], port=redis_url[1], db=0)
+
 
 class Camera():
-    def __init__(self):
+    def __init__(self, sid):
+        self.movement_key = f'movement--{sid}'
         self.cam = cv2.VideoCapture(0)
+        # self.cam = cv2.VideoCapture(str(
+        #     Path(__file__).parent.absolute() / '0000.mkv'))
         self.active = False
 
         self.frame_buffer = Queue()
-
         self.clear_buffer()
 
     def clear_buffer(self):
@@ -45,8 +54,7 @@ class Camera():
         self.first_frame = None
         self.prev_frame = None
 
-        # Initialise movement vector list (x, y, r)
-        self.movement = (0, 0, 0)
+        r.set(self.movement_key, json.dumps((0, 0, 0)))
 
     def start_capture(self):
         """
@@ -63,7 +71,6 @@ class Camera():
 
             # Check frame was correctly read
             if not ret:
-                log.info(ret)
                 raise Exception('Unable to capture a frame!')
 
             # If first capture, save to first_frame, otherwise add to frame buffer
@@ -95,7 +102,7 @@ class Camera():
                     f'Unable to track {self.track_err_count} frames in a row! There may be an issue with the camera')
 
             # If frame_buffer was recently cleared, wait for re-initialisation
-            while self.first_frame is None:
+            while (self.first_frame is None) or (len(self.frame_buffer.queue) == 0):
                 time.sleep(0.01)
 
             # Setup frames
@@ -134,14 +141,14 @@ class Camera():
                 # Extract rotation angle
                 da = np.arctan2(m[0][1][0], m[0][0][0])
 
-                # log.debug(f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
-
-                # Update movement tracker
-                self.movement = tuple(
-                    map(lambda i, j: i + j, self.movement, (dx, dy, da)))
-
                 log.debug(
-                    f'Movement: {self.movement[0]:5.2f}:{self.movement[0]:5.2f}:{self.movement[0]:5.2f}')
+                    f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
+
+                old_movement = json.loads(r.get(self.movement_key))
+                new_pos = tuple(
+                    map(lambda i, j: i + j, old_movement, (dx, dy, da)))
+
+                r.set(self.movement_key, json.dumps(new_pos))
 
                 self.track_err_count = 0
                 self.prev_frame = new_frame
@@ -167,11 +174,17 @@ def get_inference(img):
     _, img_encoded = cv2.imencode('.jpg', img)
 
     # Send http request with image and receive response
-    response = requests.post(
-        url,
-        data=img_encoded.tostring(),
-        headers=headers,
-        timeout=int(os.getenv('INFERENCE_TIMEOUT')) / 1000
-    )
+    try:
+        response = requests.post(
+            url,
+            data=img_encoded.tostring(),
+            headers=headers,
+            timeout=int(os.getenv('INFERENCE_TIMEOUT')) / 1000
+        )
 
-    return json.loads(response.text)
+        return json.loads(response.text)
+
+    except requests.exceptions.ReadTimeout as e:
+        log.error(e)
+
+        return None
