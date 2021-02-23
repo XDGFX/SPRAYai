@@ -8,7 +8,6 @@ Callum Morrison, 2021
 """
 
 import json
-import math
 import os
 import re
 import time
@@ -20,6 +19,7 @@ import numpy as np
 import redis
 import requests
 from dotenv import load_dotenv
+from pymata4 import pymata4
 
 import logs
 
@@ -31,7 +31,7 @@ env_path = Path(__file__).parent.absolute() / '.env'
 load_dotenv(dotenv_path=env_path)
 
 # Initialise Redis
-redis_url = re.match('([\d./:\w]+):([\d]+)',
+redis_url = re.match('([\d.]+):([\d]+)',
                      os.environ.get('REDIS_URL')).groups()
 r = redis.Redis(host=redis_url[0], port=redis_url[1], db=0)
 
@@ -145,8 +145,8 @@ class Camera():
                 # Extract rotation angle
                 da = np.arctan2(m[0][1][0], m[0][0][0])
 
-                log.debug(
-                    f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
+                # log.debug(
+                #     f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
 
                 old_movement = json.loads(r.get(self.movement_key))
                 new_pos = tuple(
@@ -192,22 +192,101 @@ class Camera():
 
             return None
 
+    def draw_bounding_boxes(self, img, bbox):
+        """
+        Draw rectangles around each detected instance in img.
+
+        @return
+        img         modified image
+        """
+        for i in range(bbox['count']):
+            box = bbox['bounding_boxes'][i]
+            x = int(box[0])
+            y = int(box[1])
+            w = int(box[2])
+            h = int(box[3])
+
+            img = cv2.rectangle(img, (x, y), (x+w, y+h), (0, 0, 255), 2)
+
+        return img
+
+    def write_image(self, img, filename):
+        """
+        Write an OpenCV image to a file for debugging.
+        """
+        cv2.imwrite(filename, img)
+
 
 class Servo():
     def __init__(self, sid, img_width, img_height):
+
+        # Setup general parameters
         self.movement_key = f'movement--{sid}'
         self.img_width = img_width
         self.img_height = img_height
+
+        # Arduino setup
+        self.a = pymata4.Pymata4()
+        self.servo_pin_x = 9
+        self.servo_pin_y = 10
+        self.spray_pin = 5
+
+        # Servo parameters
+        self.spray_per_plant = float(os.environ.get(
+            'SPRAY_PER_PLANT')) or 0.25     # seconds
+        self.spray_total_time = float(os.environ.get(
+            'SPRAY_TOTAL_TIME')) or 3       # seconds
+        self.spray_angle_rate = float(os.environ.get(
+            'SPRAY_ANGLE_RATE')) or 240     # degrees per second
+
+        # Multiplier to get from distance to angle, may change this to tan(angle) = dist / height
+        self.spray_dist2angle = float(os.environ.get(
+            'SPRAY_DIST2ANGLE')) or 5
+
+        # Setup Arduino output and set to vertical
+        for pin in [self.servo_pin_x, self.servo_pin_y]:
+            self.a.set_pin_mode_servo(pin)
+            self.a.servo_write(pin, 90)
+            time.sleep(90 / self.spray_angle_rate)
+
+        self.a.set_pin_mode_digital_output(self.spray_pin)
+
+    def goto_point(self, point, prev_point=(0, 0)):
+        """
+        Move sprayer nozzle to point at a given point, in the form (x, y).
+        Does not return until complete.
+
+        point       the point to move to
+        prev_point  the current position
+        """
+
+        # Calculate time to reach position by using maximum distance
+        dist = max(abs(np.subtract(prev_point, point)))
+        wait_time = dist * self.spray_dist2angle / self.spray_angle_rate
+
+        # Move nozzle to position
+        self.a.servo_write(self.servo_pin_x, int(
+            point[0] * self.spray_dist2angle + 90))
+        self.a.servo_write(self.servo_pin_y, int(
+            point[1] * self.spray_dist2angle + 90))
+
+        time.sleep(wait_time)
+
+    def spray(self, enable=False):
+        """
+        Enable or disable the spray nozzle.
+        """
+        self.a.digital_pin_write(self.spray_pin, enable)
 
     def print_movement(self):
         """
         Prints the current movement position
         """
-        print(json.loads(r.get(self.movement_key)))
+        log.info(json.loads(r.get(self.movement_key)))
 
     def correct_bbox(self, bbox):
         """
-        Correct a list of bounding boxes according to the current movement
+        Correct a list of bounding boxes according to the current movement.
 
         bbox        list of bounding boxes
 
@@ -240,11 +319,11 @@ class Servo():
             # Convert centre points based on rotation
             a = current_movement[2]
             rho, phi = self.cart2pol(x, y)
-            x, y = self.pol2cart(rho, phi - a)
+            x, y = self.pol2cart(rho, phi + a)
 
             # Convert w, h based on rotation
-            w = w * math.cos(a) + h * math.sin(a)
-            h = h * math.cos(a) + w * math.sin(a)
+            w = w * np.cos(a) + h * np.sin(a)
+            h = h * np.cos(a) + w * np.sin(a)
 
             # Convert back to bbox format
             new_bbox = self.centre2bbox(x, y, w, h)
@@ -254,10 +333,33 @@ class Servo():
 
         return bbox
 
+    def correct_point(self, point):
+        """
+        Correct an (x, y) point according to the current movement.
+
+        @return
+        (x, y)      corrected (x, y) point
+        """
+        x = point[0]
+        y = point[1]
+
+        current_movement = json.loads(r.get(self.movement_key))
+
+        # Convert centre points based on movement
+        x = x + current_movement[0]
+        y = y + current_movement[1]
+
+        # Convert centre points based on rotation
+        a = current_movement[2]
+        rho, phi = self.cart2pol(x, y)
+        x, y = self.pol2cart(rho, phi + a)
+
+        return (x, y)
+
     def bbox2centre(self, bbox):
         """
         Converts a bounding box in the form (x, y, w, h) to a centre point (x, y),
-        while also moving coordinates from bbox origin (top, left) to movement origin (centre)
+        while also moving coordinates from bbox origin (top, left) to movement origin (centre).
         """
 
         # Convert to centre point
@@ -275,7 +377,7 @@ class Servo():
     def centre2bbox(self, x, y, w, h):
         """
         Converts a centre point in the form (x, y) to a bounding box (x, y, w, h),
-        while also moving coordinates from movement origin (centre), to bbox origin (top, left)
+        while also moving coordinates from movement origin (centre), to bbox origin (top, left).
         """
 
         # Convert to bbox point

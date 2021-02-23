@@ -14,12 +14,13 @@ import socket
 import time
 from pathlib import Path
 from threading import Thread
+
 import socketio
 from dotenv import load_dotenv
 
 import logs
+import spray
 import vision
-from spray import print_movement
 
 # Setup log
 log = logs.create_log(__name__)
@@ -35,6 +36,16 @@ sio = socketio.Client()
 # Initialise spraying queue
 spray = queue.Queue(maxsize=1)
 
+# Initialise camera
+cam = vision.Camera(sid=sio.get_sid(namespace='/pi'))
+
+# Initialise servos
+servo = vision.Servo(
+    sid=sio.get_sid(namespace='/pi'),
+    img_width=cam.cam.get(3),
+    img_height=cam.cam.get(4)
+)
+
 
 # --- SOCKETIO CONNECTION EVENTS ---
 @sio.event(namespace='/pi')
@@ -44,7 +55,8 @@ def connect():
     client = {
         "sid": sio.get_sid(namespace='/pi'),
         "hostname": socket.gethostname(),
-        "addr": socket.gethostbyname(socket.gethostname())
+        "addr": socket.gethostbyname(socket.gethostname()),
+        "conn_time": round(time.time())
     }
 
     log.info(client)
@@ -119,9 +131,6 @@ def start_spraying():
     Main logic for overall spray program.
     """
 
-    # Initialise camera
-    cam = vision.Camera(sid=sio.get_sid(namespace='/pi'))
-
     # Enable frame capture
     t_cap = Thread(target=cam.start_capture)
     t_cap.start()
@@ -130,10 +139,24 @@ def start_spraying():
     t_track = Thread(target=cam.start_track)
     t_track.start()
 
-    # Keep spraying while something is in the queue
+    prev_point = (0, 0)
+
+    start_time = time.time()
+
+    if os.environ.get('DEBUG_TRACK').lower() in ['true', 't', '1']:
+        import shutil
+
+        for path in ['original', 'corrected']:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+
+            os.mkdir(path)
+
+        frame_count = 0
+
+    # Keep spraying while spraying is active
     while len(spray.queue):
         log.info('Spraying')
-        start_time = time.time()
 
         # Clear previous buffer
         cam.clear_buffer()
@@ -143,23 +166,78 @@ def start_spraying():
             time.sleep(0.01)
 
         # Perform inference
-        bbox = vision.get_inference(cam.first_frame)
+        bbox = cam.get_inference(cam.first_frame)
 
         # Check that the request was successful
         if bbox is None:
             continue
 
         # Check if any detections were made
-        # if bbox['count'] == 0:
-        #     log.info('No detections found! Not bothering to continue this frame.')
+        if bbox['count'] == 0:
+            log.info('No detections found! Not bothering to continue this frame.')
 
-        #     # Wait until next frame should be captured
-        #     time.sleep(inference_wait -
-        #                ((time.time() - start_time) % inference_wait))
+            # Wait until next frame should be captured
+            time.sleep(inference_wait -
+                       ((time.time() - start_time) % inference_wait))
 
-        #     continue
+            continue
 
-        print_movement(sid=sio.get_sid(namespace='/pi'))
+        if os.environ.get('DEBUG_TRACK').lower() in ['true', 't', '1']:
+            # Save frames for debugging
+            original_inference = cam.draw_bounding_boxes(cam.first_frame, bbox)
+            bbox = servo.correct_bbox(bbox)
+            corrected_inference = cam.draw_bounding_boxes(
+                cam.frame_buffer.get(), bbox)
+
+            cam.write_image(original_inference,
+                            f'original/{frame_count:04}.jpg')
+            cam.write_image(corrected_inference,
+                            f'corrected/{frame_count:04}.jpg')
+
+            frame_count += 1
+
+        # Convert bounding boxes to centre points to spray
+        original_points = [servo.bbox2centre(
+            bbox['bounding_boxes'][i]) for i in range(bbox['count'])]
+
+        # Order points starting at the bottom (largest y)
+        ordered_points = sorted(
+            original_points, key=lambda point: point[1], reverse=True)
+
+        # Spray each point
+        total_spray_start_time = time.time()
+        for point in ordered_points:
+
+            # Check that spray time has not been exceeded
+            if time.time() > total_spray_start_time + servo.spray_total_time:
+                log.warning(
+                    'Ran out of time to spray all plants in this image')
+                log.warning(
+                    f'Consider increasing SPRAY_TOTAL_TIME if possible (currently: {servo.spray_total_time}s)')
+                break
+
+            # Do this twice to ensure initial spray is relatively accurate
+            for i in range(2):
+                # Make initial correction
+                new_point = servo.correct_point(point)
+
+                # Move sprayer to position
+                servo.goto_point(new_point, prev_point)
+                prev_point = new_point
+
+            # Start spraying
+            servo.spray(enable=True)
+
+            spray_start_time = time.time()
+
+            # Keep tracking while spraying
+            while time.time() < spray_start_time + servo.spray_per_plant:
+                new_point = servo.correct_point(point)
+                servo.goto_point(new_point, prev_point)
+                prev_point = new_point
+
+            # Stop spraying
+            servo.spray(enable=False)
 
     # Terminate video stream
     cam.active = False
