@@ -8,20 +8,22 @@ Flask-based API webserver to handle control over the Navvy smart sprayer.
 Callum Morrison, 2021
 """
 
-import threading
-from flask import Flask, request, render_template
+import json
+from threading import Thread, Lock
+
+import redis
+from flask import Flask, render_template, request
 from flask_socketio import SocketIO
-from threading import Thread
 
 app = Flask(__name__)
 # sio = SocketIO(app, async_mode='threading')
 sio = SocketIO(app)
 
-# Client_list is a big list of all connected clients, and includes information about the client.
-client_list = []
-
-# Connections is a dictionary in the form {sid: index} where `index` is the location of the client in client_list with sid=sid
-connections = {}
+# Initialise redis client database
+r = redis.Redis(host='0.0.0.0', port='6379', db=0)
+redis_lock = Lock()
+r.set('client_list', json.dumps([]))
+r.set('connections', json.dumps({}))
 
 valid_namespaces = ["/pi", "/host", "/"]
 
@@ -69,15 +71,22 @@ def emit_pi(namespace=None):
 # --- WEBSOCKET ROUTES ---
 @sio.event(namespace='/pi')
 def register_client(client):
+    
+    redis_lock.acquire()
+    client_list = json.loads(r.get('client_list'))
+    connections = json.loads(r.get('connections'))
 
     # Register the client in the client_list
     index = len(client_list)
     client_list.append(client)
     connections[request.sid] = index
 
-    print(client_list)
-
     print(f'Registered client: {client}')
+
+    r.set('client_list', json.dumps(client_list))
+    r.set('connections', json.dumps(connections))
+
+    redis_lock.release()
 
 
 @sio.event(namespace='/pi')
@@ -89,10 +98,23 @@ def connect():
 def disconnect():
     print(f'{request.sid} has disconnected from /pi')
 
+    redis_lock.acquire()
+    client_list = json.loads(r.get('client_list'))
+    connections = json.loads(r.get('connections'))
+
     # Remove that client from the client_list
-    index = connections[request.sid]
-    del connections[request.sid]
-    del client_list[index]
+    try:
+        index = connections[request.sid]
+        del connections[request.sid]
+        del client_list[index]
+
+        r.set('client_list', json.dumps(client_list))
+        r.set('connections', json.dumps(connections))
+    except IndexError:
+        print('A client disconnected before it was fully registered.')
+        print(f'sid: {request.sid}')
+
+    redis_lock.release()
 
 
 @sio.event(namespace='/host')
@@ -126,3 +148,7 @@ def emit(data):
 
     print(f'Received emit request: {cmd} for namespace {namespace}')
     sio.emit(cmd, namespace=namespace)
+
+
+if __name__ == '__main__':
+    start_server()
