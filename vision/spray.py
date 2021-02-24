@@ -26,14 +26,6 @@ env_path = Path(__file__).parent.absolute() / '.env'
 load_dotenv(dotenv_path=env_path)
 
 # Initialise Redis
-redis_url = re.match('([\d./:\w]+):([\d]+)',
+redis_url = re.match('([\d.]+):([\d]+)',
                      os.environ.get('REDIS_URL')).groups()
 r = redis.Redis(host=redis_url[0], port=redis_url[1], db=0)
-
-
-def print_movement(sid):
-    movement_key = f'movement--{sid}'
-
-    for i in range(100):
-        print(json.loads(r.get(movement_key)))
-        time.sleep(0.1)

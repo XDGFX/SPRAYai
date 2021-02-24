@@ -40,10 +40,11 @@ class Camera():
     def __init__(self, sid):
         self.movement_key = f'movement--{sid}'
 
-        # self.cam = cv2.VideoCapture(0)
-
-        self.cam = cv2.VideoCapture(str(
-            Path(__file__).parent.absolute() / '0000.mkv'))
+        if os.environ.get('DEBUG_CAM').lower() in ['true', 't', '1']:
+            self.cam = cv2.VideoCapture(str(
+                Path(__file__).parent.absolute() / '0000.mkv'))
+        else:
+            self.cam = cv2.VideoCapture(0)
 
         self.active = False
 
@@ -76,7 +77,15 @@ class Camera():
 
             # Check frame was correctly read
             if not ret:
-                raise Exception('Unable to capture a frame!')
+                if os.environ.get('DEBUG_CAM').lower() in ['true', 't', '1']:
+                    # Reload the video stream
+                    self.cam = cv2.VideoCapture(str(
+                        Path(__file__).parent.absolute() / '0000.mkv'))
+
+                    continue
+                
+                else:
+                    raise Exception('Unable to capture a frame!')
 
             # If first capture, save to first_frame, otherwise add to frame buffer
             if self.first_frame is None:

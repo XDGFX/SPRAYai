@@ -23,7 +23,7 @@ import spray
 import vision
 
 # Setup log
-log = logs.create_log(__name__)
+log = logs.create_log('host')
 
 # Load environment variables
 env_path = Path(__file__).parent.absolute() / '.env'
@@ -207,6 +207,10 @@ def start_spraying():
         # Spray each point
         total_spray_start_time = time.time()
         for point in ordered_points:
+            
+            # Check if spraying has been disabled
+            if not len(spray.queue):
+                break
 
             # Check that spray time has not been exceeded
             if time.time() > total_spray_start_time + servo.spray_total_time:
@@ -238,6 +242,9 @@ def start_spraying():
 
             # Stop spraying
             servo.spray(enable=False)
+
+    # Stop spraying
+    servo.spray(enable=False)
 
     # Terminate video stream
     cam.active = False
