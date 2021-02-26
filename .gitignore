@@ -147,3 +147,5 @@ datasets/
 
 # Redis database
 *.rdb
+
+*/nvvy_rsa

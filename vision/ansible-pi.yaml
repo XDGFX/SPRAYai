@@ -1,0 +1,48 @@
+---
+  - name: ansible-pi
+    hosts: pis
+    become: yes
+    tasks:
+
+      - name: Update all packages
+        apt:
+          upgrade: yes
+          update_cache: yes
+          cache_valid_time: 3600
+
+      - name: Set the 'pi#' hostname
+        ansible.builtin.hostname:
+          name: "{{ inventory_hostname }}"
+
+      - name: Install other applications
+        apt:
+          name:
+          - python3-pip
+          - python3-venv
+          - vim
+          - fish
+          state: latest
+
+      - name: Setup 'pi' user
+        user:
+          name: pi
+          shell: /usr/bin/fish
+          password: $6$Rz0gU/c.zPT$ry6DmU6pV1FsGCvyTH4ToN4bM5MWPfLuLCfLfJamc66HQLQqtKzGRmdvth8tl.UhK/O8Ahslo49WenFujA0U/1
+          groups: adm,dialout,cdrom,floppy,sudo,audio,dip,video,plugdev,netdev,lxd
+          append: yes
+
+      - name: Create .ssh folder
+        file:
+          path: ~pi/.ssh
+          state: directory
+          owner: pi
+          group: pi
+          mode: 0700
+
+      - name: Upload SSH key
+        copy:
+          src: ../keys/nvvy_rsa.pub
+          dest: ~pi/.ssh/authorized_keys
+          owner: pi
+          group: pi
+          mode: 0700
