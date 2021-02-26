@@ -36,21 +36,28 @@ sio = socketio.Client()
 # Initialise spraying queue
 spray = queue.Queue(maxsize=1)
 
-# Initialise camera
-cam = vision.Camera(sid=sio.get_sid(namespace='/pi'))
-
-# Initialise servos
-servo = vision.Servo(
-    sid=sio.get_sid(namespace='/pi'),
-    img_width=cam.cam.get(3),
-    img_height=cam.cam.get(4)
-)
-
 
 # --- SOCKETIO CONNECTION EVENTS ---
 @sio.event(namespace='/pi')
 def connect():
     log.info("Connected to host!")
+
+    # I don't like using global, but these variables
+    # need to be initialised after WebSocket connection.
+    # I might move them and the logic to `spray.py` as
+    # originally intended, and keep this just to ws.
+    global cam
+    global servo
+
+    # Initialise camera
+    cam = vision.Camera(sid=sio.get_sid(namespace='/pi'))
+
+    # Initialise servos
+    servo = vision.Servo(
+        sid=sio.get_sid(namespace='/pi'),
+        img_width=cam.cam.get(3),
+        img_height=cam.cam.get(4)
+    )
 
     client = {
         "sid": sio.get_sid(namespace='/pi'),
@@ -111,6 +118,62 @@ def connect_to_host():
 
     while not connected:
         try:
+            # Check if host url has been defined
+            if not os.getenv('HOST_URL'):
+                import random
+                import string
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                import requests
+
+                def test_url(url):
+                    """
+                    Check if url is the correct host server.
+                    """
+                    try:
+                        # Make request
+                        params = {
+                            'id': ''.join(random.choice(string.ascii_letters) for _ in range(10))
+                        }
+                        r = requests.get(url, params=params, timeout=2)
+
+                        # Validate server is correct
+                        log.info(f'Found service at url: {url}')
+                        return r.json()['id'] == f'navvy_{params["id"]}'
+
+                    except Exception as e:
+                        return False
+
+                # Find subnet from host ip
+                subnet = socket.gethostbyname(
+                    socket.gethostname()).split('.')[0:-1]
+
+                # Assume network is /24 (possible ips from 1-255)
+                addr = range(1, 256)
+                port = '5040'
+                ips = [
+                    f"http://{'.'.join(subnet)}.{x}:{port}/discover" for x in addr]
+
+                # Ping endpoints 10 at a time for performance
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    future_ip = {executor.submit(
+                        test_url, ip): ip for ip in ips}
+
+                    for future in as_completed(future_ip):
+                        if future.result():
+                            ip = future_ip[future]
+                            os.environ['HOST_URL'] = ip.rstrip('/discover')
+                            break
+
+                # Check if a host was found
+                if not os.getenv('HOST_URL'):
+                    log.error(
+                        'No host url was supplied and one was not found automatically.')
+                    raise SystemExit
+                else:
+                    log.info(
+                        f'Using auto-discovered host at url: {os.getenv("HOST_URL")}')
+
             # Connect to the /pi namespace for Pi specific commands
             sio.connect(os.getenv('HOST_URL'), namespaces='/pi')
             connected = True
@@ -207,7 +270,7 @@ def start_spraying():
         # Spray each point
         total_spray_start_time = time.time()
         for point in ordered_points:
-            
+
             # Check if spraying has been disabled
             if not len(spray.queue):
                 break
