@@ -12,7 +12,7 @@ import json
 from threading import Thread, Lock
 
 import redis
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO
 
 app = Flask(__name__)
@@ -44,6 +44,17 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/discover')
+def discover():
+    from flask import __version__
+    return jsonify({
+        'ping': 'pong',
+        'flask_version': __version__,
+        'navvy_spray_version': 'dev',
+        'id': f'navvy_{request.args.get("id")}'
+    })
+
+
 @app.route('/emit/<namespace>')
 def emit_pi(namespace=None):
     """
@@ -71,7 +82,7 @@ def emit_pi(namespace=None):
 # --- WEBSOCKET ROUTES ---
 @sio.event(namespace='/pi')
 def register_client(client):
-    
+
     redis_lock.acquire()
     client_list = json.loads(r.get('client_list'))
     connections = json.loads(r.get('connections'))
