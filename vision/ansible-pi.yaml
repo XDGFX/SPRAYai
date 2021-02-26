@@ -41,7 +41,7 @@
 
       - name: Upload SSH key
         copy:
-          src: ../keys/nvvy_rsa.pub
+          src: ../keys/navvy_rsa.pub
           dest: ~pi/.ssh/authorized_keys
           owner: pi
           group: pi
