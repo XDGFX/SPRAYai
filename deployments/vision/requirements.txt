@@ -12,3 +12,4 @@ python-socketio==5.0.4
 redis==3.5.3
 requests==2.25.1
 urllib3==1.26.3
+picamera==1.13

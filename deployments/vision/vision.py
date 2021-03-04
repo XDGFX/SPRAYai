@@ -19,6 +19,8 @@ import numpy as np
 import redis
 import requests
 from dotenv import load_dotenv
+from picamera import PiCamera
+from picamera.array import PiRGBArray
 from pymata4 import pymata4
 
 import logs
@@ -44,7 +46,9 @@ class Camera():
             self.cam = cv2.VideoCapture(str(
                 Path(__file__).parent.absolute() / '0000.mkv'))
         else:
-            self.cam = cv2.VideoCapture(0)
+            # self.cam = cv2.VideoCapture(0)
+            self.cam = PiCamera()
+            self.raw_cap = PiRGBArray(self.cam)
 
         self.active = False
 
@@ -73,10 +77,11 @@ class Camera():
         frame_wait = 1 / int(os.getenv('FRAMERATE_TRACK'))
 
         while self.active:
-            ret, frame = self.cam.read()
+            self.cam.capture(self.raw_cap, format='bgr')
+            frame = self.raw_cap.array
 
             # Check frame was correctly read
-            if not ret:
+            if not frame:
                 if os.environ.get('DEBUG_CAM').lower() in ['true', 't', '1']:
                     # Reload the video stream
                     self.cam = cv2.VideoCapture(str(
