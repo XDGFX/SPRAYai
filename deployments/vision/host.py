@@ -112,67 +112,20 @@ def connect_to_host():
     """
     Attempt to connect to the host device.
     """
-
     connection_attempts = 0
     connected = False
 
     while not connected:
+
+        if connection_attempts > 10:
+            log.critical(
+                f'Unable to connect to the host at {os.getenv("HOST_URL")} after {connection_attempts} tries.')
+            raise SystemExit
+
         try:
             # Check if host url has been defined
             if not os.getenv('HOST_URL'):
-                import random
-                import string
-                from concurrent.futures import ThreadPoolExecutor, as_completed
-
-                import requests
-
-                def test_url(url):
-                    """
-                    Check if url is the correct host server.
-                    """
-                    try:
-                        # Make request
-                        params = {
-                            'id': ''.join(random.choice(string.ascii_letters) for _ in range(10))
-                        }
-                        r = requests.get(url, params=params, timeout=2)
-
-                        # Validate server is correct
-                        log.info(f'Found service at url: {url}')
-                        return r.json()['id'] == f'navvy_{params["id"]}'
-
-                    except Exception as e:
-                        return False
-
-                # Find subnet from host ip
-                subnet = socket.gethostbyname(
-                    socket.gethostname()).split('.')[0:-1]
-
-                # Assume network is /24 (possible ips from 1-255)
-                addr = range(1, 256)
-                port = '5040'
-                ips = [
-                    f"http://{'.'.join(subnet)}.{x}:{port}/discover" for x in addr]
-
-                # Ping endpoints 10 at a time for performance
-                with ThreadPoolExecutor(max_workers=10) as executor:
-                    future_ip = {executor.submit(
-                        test_url, ip): ip for ip in ips}
-
-                    for future in as_completed(future_ip):
-                        if future.result():
-                            ip = future_ip[future]
-                            os.environ['HOST_URL'] = ip.rstrip('/discover')
-                            break
-
-                # Check if a host was found
-                if not os.getenv('HOST_URL'):
-                    log.error(
-                        'No host url was supplied and one was not found automatically.')
-                    raise SystemExit
-                else:
-                    log.info(
-                        f'Using auto-discovered host at url: {os.getenv("HOST_URL")}')
+                auto_discover_host()
 
             # Connect to the /pi namespace for Pi specific commands
             sio.connect(os.getenv('HOST_URL'), namespaces='/pi')
@@ -187,6 +140,69 @@ def connect_to_host():
                 f'Attempting to reconnect (Attempt: {connection_attempts})')
 
             time.sleep(1)
+
+
+def auto_discover_host():
+    """
+    Attempt to automatically discover the host machine by pinging
+    all IPs in the current subnet.
+    """
+    import random
+    import string
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    import requests
+
+    def test_url(url):
+        """
+        Check if url is the correct host server.
+        """
+        try:
+            # Make request
+            params = {
+                'id': ''.join(random.choice(string.ascii_letters) for _ in range(10))
+            }
+            r = requests.get(url, params=params, timeout=2)
+
+            # Validate server is correct
+            log.info(f'Found service at url: {url}')
+            return r.json()['id'] == f'navvy_{params["id"]}'
+
+        except Exception as e:
+            return False
+
+    log.info('No host url supplied in environment variables')
+    log.info('Performing automatic host discovery...')
+
+    # Find subnet from host ip
+    subnet = socket.gethostbyname(
+        socket.gethostname()).split('.')[0:-1]
+
+    # Assume network is /24 (possible IPs from 1-255)
+    addr = range(1, 256)
+    port = '5040'
+    ips = [
+        f"http://{'.'.join(subnet)}.{x}:{port}/discover" for x in addr]
+
+    # Ping endpoints 10 at a time for performance
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        future_ip = {executor.submit(
+            test_url, ip): ip for ip in ips}
+
+        for future in as_completed(future_ip):
+            if future.result():
+                ip = future_ip[future]
+                os.environ['HOST_URL'] = ip.rstrip('/discover')
+                break
+
+    # Check if a host was found
+    if not os.getenv('HOST_URL'):
+        log.critical(
+            'No host url was supplied and one was not found automatically.')
+        raise SystemExit
+    else:
+        log.info(
+            f'Using auto-discovered host at url: {os.getenv("HOST_URL")}')
 
 
 def start_spraying():
