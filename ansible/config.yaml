@@ -19,8 +19,10 @@
           name:
           - python3-pip
           - python3-venv
+          - python3-picamera
           - vim
           - fish
+          - git
           state: latest
 
       - name: Setup 'pi' user
@@ -28,7 +30,7 @@
           name: pi
           shell: /usr/bin/fish
           password: $6$Rz0gU/c.zPT$ry6DmU6pV1FsGCvyTH4ToN4bM5MWPfLuLCfLfJamc66HQLQqtKzGRmdvth8tl.UhK/O8Ahslo49WenFujA0U/1
-          groups: adm,dialout,cdrom,floppy,sudo,audio,dip,video,plugdev,netdev,lxd
+          groups: dialout,sudo,audio,video,plugdev,netdev
           append: yes
 
       - name: Create .ssh folder
