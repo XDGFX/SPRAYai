@@ -1,0 +1,145 @@
+---
+- name: ansible-jetson
+  hosts: jetson
+  become: yes
+  tasks:
+
+    - name: Update all packages
+      apt:
+        upgrade: yes
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Set the correct hostname
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
+
+    # - name: Set static ip
+    #   ansible.builtin.shell:
+    #     cmd: sudo nmcli c mod "Wired connection 1" ipv4.address 192.168.0.10/24 && sudo nmcli c mod "Wired connection 1" ipv4.gateway 192.168.0.1 && sudo nmcli c mod "Wired connection 1" ipv4.dns "1.1.1.1,1.0.0.1" && sudo nmcli c mod "Wired connection 1" ipv4.method manual
+
+    - name: Install other applications
+      apt:
+        name:
+        - python3-pip
+        - python3-venv
+        - vim
+        - fish
+        - git
+
+        # The below are required for Docker installation
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - software-properties-common
+        - libffi-dev
+
+        state: latest
+
+    # --- Install Docker ---
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+
+    - name: Install docker-ce
+      apt:
+        name: docker-ce
+        state: present
+        update_cache: false
+
+    - name: Run and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Setup Docker Python module
+      pip:
+        name: docker
+
+    - name: Create docker group
+      ansible.builtin.group:
+        name: docker
+        state: present
+
+    # --- User configuration ---
+    - name: Setup user
+      user:
+        name: "{{ inventory_hostname }}"
+        shell: /usr/bin/fish
+        # Default password is 'jn'
+        password: $6$sY/ORKnopVEFlG1U$Eku3AzF8S4DsLf3rstzhSeLNJugkzl81Q0MqGQUIk7BuRJJttk211Vd461XJKh6UGgOFWc2LY509Z084IsPvA0
+        groups: dialout,sudo,audio,video,plugdev,netdev,docker
+        append: yes
+
+    - name: Create .ssh folder
+      file:
+        path: "~{{ inventory_hostname }}/.ssh"
+        state: directory
+        owner: "{{ inventory_hostname }}"
+        group: "{{ inventory_hostname }}"
+        mode: 0700
+
+    - name: Upload SSH key
+      copy:
+        src: ../keys/navvy_rsa.pub
+        dest: "~{{ inventory_hostname }}/.ssh/authorized_keys"
+        owner: "{{ inventory_hostname }}"
+        group: "{{ inventory_hostname }}"
+        mode: 0700
+
+    - name: Clone latest repo
+      ansible.builtin.git:
+        repo: https://github.com/XDGFX/navvy-spray-ai.git
+        dest: "/home/{{ inventory_hostname }}/navvy-spray-ai"
+
+    # --- Docker setup ---
+    - name: Build inference container
+      docker_image:
+        name: yolov4
+        tag: v1
+        build:
+          path: "/home/{{ inventory_hostname }}/navvy-spray-ai/deployments/detector"
+        source: build
+        state: present
+
+    # - name: Start inference container
+    #   docker_container:
+    #     name: yolov4
+    #     image: yolov4:v1
+    #     state: started
+    #     restart_policy: always
+    #     device_requests:
+    #       capabilities: gpu
+    #       driver: nvidia
+    #       count: -1
+
+    - name: Remove existing inference container
+      docker_container:
+        name: yolov4
+        state: absent
+
+    - name: Start inference container
+      ansible.builtin.shell: docker run -d --runtime nvidia --restart always --name yolov4 -p 5050:5050 yolov4:v1
+
+    - name: Start redis container
+      docker_container:
+        name: redis
+        image: redis
+        command: redis-server
+        state: started
+        restart_policy: always
+        published_ports:
+          - 6379:6379
+
+
+    # - name: Set text mode (Disable GUI)
+    #   ansible.builtin.shell: 
+    #     cmd: systemctl set-default multi-user.target
+    

@@ -29,6 +29,7 @@
         user:
           name: pi
           shell: /usr/bin/fish
+          # Default password is 'pi'
           password: $6$Rz0gU/c.zPT$ry6DmU6pV1FsGCvyTH4ToN4bM5MWPfLuLCfLfJamc66HQLQqtKzGRmdvth8tl.UhK/O8Ahslo49WenFujA0U/1
           groups: dialout,sudo,audio,video,plugdev,netdev
           append: yes
