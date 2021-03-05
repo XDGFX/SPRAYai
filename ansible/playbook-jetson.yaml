@@ -14,9 +14,16 @@
       ansible.builtin.hostname:
         name: "{{ inventory_hostname }}"
 
-    # - name: Set static ip
-    #   ansible.builtin.shell:
-    #     cmd: sudo nmcli c mod "Wired connection 1" ipv4.address 192.168.0.10/24 && sudo nmcli c mod "Wired connection 1" ipv4.gateway 192.168.0.1 && sudo nmcli c mod "Wired connection 1" ipv4.dns "1.1.1.1,1.0.0.1" && sudo nmcli c mod "Wired connection 1" ipv4.method manual
+    - name: Set static ip
+      blockinfile:
+        path: /etc/network/interfaces
+        block: |
+          auto eth0
+          iface eth0 inet static
+            address {{ ansible_host }}
+            netmask 255.255.255.0
+            gateway 192.168.0.1
+            dns-nameservers 1.1.1.1 1.0.0.1
 
     - name: Install other applications
       apt:
@@ -100,7 +107,12 @@
         dest: "/home/{{ inventory_hostname }}/navvy-spray-ai"
 
     # --- Docker setup ---
-    - name: Build inference container
+    - name: Set default Docker runtime to Nvidia
+      copy:
+        src: templates/docker-daemon-jetson.json
+        dest: /etc/docker/daemon.json
+
+    - name: Build inference container (This might take a very long time!)
       docker_image:
         name: yolov4
         tag: v1
@@ -109,25 +121,14 @@
         source: build
         state: present
 
-    # - name: Start inference container
-    #   docker_container:
-    #     name: yolov4
-    #     image: yolov4:v1
-    #     state: started
-    #     restart_policy: always
-    #     device_requests:
-    #       capabilities: gpu
-    #       driver: nvidia
-    #       count: -1
-
-    - name: Remove existing inference container
-      docker_container:
-        name: yolov4
-        state: absent
-
     - name: Start inference container
-      ansible.builtin.shell:
-        command: docker run -d --runtime nvidia --restart always --name yolov4 -p 5050:5050 yolov4:v1
+      docker_container:
+        name: inference
+        image: yolov4:v1
+        state: started
+        restart_policy: always
+        published_ports:
+          - 5050:5050
 
     - name: Start redis container
       docker_container:
