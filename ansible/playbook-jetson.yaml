@@ -126,7 +126,8 @@
         state: absent
 
     - name: Start inference container
-      ansible.builtin.shell: docker run -d --runtime nvidia --restart always --name yolov4 -p 5050:5050 yolov4:v1
+      ansible.builtin.shell:
+        command: docker run -d --runtime nvidia --restart always --name yolov4 -p 5050:5050 yolov4:v1
 
     - name: Start redis container
       docker_container:

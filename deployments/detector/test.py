@@ -21,7 +21,7 @@ DEBUG = False
 
 # ------------------------------------------------
 
-addr = 'http://192.168.0.27:5050'
+addr = 'http://192.168.0.10:5050'
 test_url = addr + '/api/detect'
 
 if DEBUG:
@@ -31,7 +31,7 @@ if DEBUG:
 content_type = 'image/jpeg'
 headers = {'content-type': content_type}
 
-img = cv2.imread('detector/test.jpg')
+img = cv2.imread('test.jpg')
 # encode image as jpeg
 _, img_encoded = cv2.imencode('.jpg', img)
 # send http request with image and receive response
