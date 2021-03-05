@@ -140,8 +140,8 @@
         published_ports:
           - 6379:6379
 
-
-    # - name: Set text mode (Disable GUI)
-    #   ansible.builtin.shell: 
-    #     cmd: systemctl set-default multi-user.target
-    
+    - name: Set text mode
+      file:
+        src: /usr/lib/systemd/system/multi-user.target
+        dest: /etc/systemd/system/default.target
+        state: link
