@@ -12,12 +12,17 @@ Callum Morrison, 2021
 import json
 
 import cv2
-import numpy as np
+import pycuda.autoinit  # Create CUDA context
+import pycuda.driver as cuda 
 
-config_file = "yolov4-tiny.cfg"
-weights_file = "yolov4-tiny.weights"
+from src.yolo_with_plugins import get_input_shape, TrtYOLO  # From jkjung-avt/tensorrt_demos
+
+dev = cuda.Device(0)  # Select GPU 0
+ctx = dev.make_context()
+
+model = "yolov4-tiny-416x416"
+num_categories = 2
 conf_threshold = 0.5    # Required confidence score for response
-nms_threshold = 0.4     # Non maximal supression threshold
 
 
 class Detector():
@@ -31,90 +36,18 @@ class Detector():
         Loads the model into the class, speeding up inference.
         """
 
-        self.net = cv2.dnn.readNet(weights_file, config_file)
-
-        # Specify to use CUDA
-        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-        self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-
-    def get_output_layers(self, net):
-        """
-        Retreive the output layer names in the architecture.
-        """
-
-        layer_names = net.getLayerNames()
-
-        output_layers = [layer_names[i[0] - 1]
-                         for i in net.getUnconnectedOutLayers()]
-
-        return output_layers
+        h, w = get_input_shape(model)
+        self.trt_yolo = TrtYOLO(model, (h, w), num_categories)
 
     def bounding_box(self, image, visualise=False):
         """
         Detect objects within the supplied image, and return their bounding boxes.
         """
-        Width = image.shape[1]
-        Height = image.shape[0]
-        scale = 0.00392
+        ctx.push()  # For thread safety
+        boxes, _, _ = self.trt_yolo.detect(image, conf_threshold)
+        ctx.pop()
 
-        # Create input blob
-        blob = cv2.dnn.blobFromImage(
-            image, scale, (416, 416), (0, 0, 0), True, crop=False)
+        # Convert to Python lists
+        boxes = [[float(elm) for elm in box] for box in boxes]
 
-        # Set input blob for the network
-        self.net.setInput(blob)
-
-        # Run inference
-        outs = self.net.forward(self.get_output_layers(self.net))
-
-        # Initialisation
-        class_ids = []
-        confidences = []
-        boxes = []
-
-        # Loop over each detection
-        for out in outs:
-            for detection in out:
-
-                # Collect confidence for checking
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-
-                # Ignore weak detections
-                if confidence > conf_threshold:
-                    center_x = int(detection[0] * Width)
-                    center_y = int(detection[1] * Height)
-                    w = int(detection[2] * Width)
-                    h = int(detection[3] * Height)
-                    x = center_x - w / 2
-                    y = center_y - h / 2
-                    class_ids.append(class_id)
-                    confidences.append(float(confidence))
-                    boxes.append([x, y, w, h])
-
-        # Apply non-maximal suppression
-        indices = cv2.dnn.NMSBoxes(
-            boxes, confidences, conf_threshold, nms_threshold)
-
-        if not visualise:
-            output = [boxes[i[0]] for i in indices]
-
-            return output
-        else:
-            # Draw a bounding box around each detection on the original image.
-            # Used for debugging, as only the image is returned.
-            colour = (0, 0, 255)
-
-            for i in indices:
-                i = i[0]
-                box = boxes[i]
-                x = round(box[0])
-                y = round(box[1])
-                w = round(box[2])
-                h = round(box[3])
-
-                cv2.rectangle(image, (x, y), (x+w, y+h), colour, 2)
-                # cv2.putText(image, class_ids[i], (x-10, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour, 2)
-
-            return image
+        return boxes

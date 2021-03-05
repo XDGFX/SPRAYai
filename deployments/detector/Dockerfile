@@ -27,19 +27,24 @@ RUN wget https://bootstrap.pypa.io/get-pip.py
 RUN python3 get-pip.py --force-reinstall
 
 # Install dependencies
-RUN pip3 install flask
+RUN pip3 install flask numpy protobuf
+
+# Install pycuda
+ENV PATH="/usr/local/cuda/bin:${PATH}"
+ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
+RUN echo "$PATH" && echo "$LD_LIBRARY_PATH"
+RUN pip3 install pycuda --verbose
 
 RUN mkdir /app
 WORKDIR /app
 
 # Get model
-RUN wget -O "yolov4-tiny.cfg" "https://github.com/XDGFX/navvy-spray-ai/releases/download/4.0/custom-yolov4-tiny-detector.cfg"
-RUN wget -O "yolov4-tiny.weights" "https://github.com/XDGFX/navvy-spray-ai/releases/download/4.0/custom-yolov4-tiny-detector_best_4000.weights"
+RUN wget -O "yolov4-tiny-416x416.trt" "https://github.com/XDGFX/navvy-spray-ai/releases/download/4.1/yolov4-tiny-416x416.trt"
 
 EXPOSE 5050
 
 # Copy webserver files
-COPY app/* /app/
+COPY app/ /app/
 
 # Start the webserver
 CMD python3 app.py
