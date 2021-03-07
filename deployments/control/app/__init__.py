@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-control/app.py
+control/app
 
 Flask-based API webserver to handle control over the Navvy smart sprayer.
 
@@ -29,13 +29,14 @@ valid_namespaces = ["/pi", "/host", "/"]
 
 
 def serve():
-    sio.run(app, host='0.0.0.0', port='5040')
+    sio.run(app, host='0.0.0.0', port='5040', debug=True)
 
 
 def start_server():
-    thread = Thread(target=serve)
-    thread.start()
-    print('Webserver started')
+    serve()
+    # thread = Thread(target=serve)
+    # thread.start()
+    # print('Webserver started')
 
 
 # --- WEBSERVER ROUTES ---

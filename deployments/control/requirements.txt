@@ -14,3 +14,4 @@ python-socketio==5.0.4
 redis==3.5.3
 six==1.15.0
 Werkzeug==1.0.1
+nodeenv==1.5.0
