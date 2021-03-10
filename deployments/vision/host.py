@@ -9,18 +9,15 @@ Callum Morrison, 2021
 """
 
 import os
-import queue
 import socket
 import time
 from pathlib import Path
-from threading import Thread
 
 import socketio
 from dotenv import load_dotenv
 
 import logs
 import spray
-import vision
 
 # Setup log
 log = logs.create_log('host')
@@ -29,12 +26,7 @@ log = logs.create_log('host')
 env_path = Path(__file__).parent.absolute() / '.env'
 load_dotenv(dotenv_path=env_path)
 
-inference_wait = 1 / float(os.getenv('FRAMERATE_INFERENCE'))
-
 sio = socketio.Client()
-
-# Initialise spraying queue
-spray = queue.Queue(maxsize=1)
 
 
 # --- SOCKETIO CONNECTION EVENTS ---
@@ -42,27 +34,15 @@ spray = queue.Queue(maxsize=1)
 def connect():
     log.info("Connected to host!")
 
-    # I don't like using global, but these variables
-    # need to be initialised after WebSocket connection.
-    # I might move them and the logic to `spray.py` as
-    # originally intended, and keep this just to ws.
-    global cam
-    global servo
+    sid = sio.get_sid(namespace='/pi')
 
-    # Initialise camera
-    cam = vision.Camera(sid=sio.get_sid(namespace='/pi'))
-
-    # Initialise servos
-    servo = vision.Servo(
-        sid=sio.get_sid(namespace='/pi'),
-        img_width=cam.cam.get(3),
-        img_height=cam.cam.get(4)
-    )
+    global s
+    s = spray.Spray(sid=sid)
 
     client = {
-        "sid": sio.get_sid(namespace='/pi'),
+        "sid": sid,
         "hostname": socket.gethostname(),
-        "addr": socket.gethostbyname(socket.gethostname()),
+        "addr": get_ip(),
         "conn_time": round(time.time())
     }
 
@@ -74,37 +54,33 @@ def connect():
 
 @sio.event(namespace='/pi')
 def connect_error(msg):
-    stop_spraying()
     log.error(f"The connection failed: {msg}")
+    disconnect_clean()
 
 
 @sio.event(namespace='/pi')
 def disconnect():
-    stop_spraying()
     log.warning("Disconnected from host!")
+    disconnect_clean()
 
 
 # --- SOCKETIO CUSTOM EVENTS ---
 @sio.event(namespace='/pi')
 def spray_enable():
-    # Check if already spraying
-    if len(spray.queue):
-        log.info('Already spraying!')
-        return
-
-    # Clear the queue in a thread-safe manner
-    with spray.mutex:
-        spray.queue.clear()
-
-    # Put something in the queue to trigger spraying
-    spray.put(True)
-
-    start_spraying()
+    try:
+        s.start_spraying()
+    except NameError:
+        log.error(
+            'A spray request was received before the device has been registered. Wait a few seconds and try again.')
 
 
 @sio.event(namespace='/pi')
 def spray_disable():
-    stop_spraying()
+    try:
+        s.stop_spraying()
+    except NameError:
+        log.error(
+            'A spray request was received before the device has been registered. Wait a few seconds and try again.')
 
 
 # --- MAIN FUNCTIONS ---
@@ -142,6 +118,22 @@ def connect_to_host():
             time.sleep(1)
 
 
+def get_ip():
+    """
+    Gets the LAN ip address, even if /etc/hosts contains localhost or if there is no internet connection.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Does not need to be reachable
+        sock.connect(('10.255.255.255', 1))
+        ip = sock.getsockname()[0]
+    except Exception:
+        ip = '127.0.0.1'
+    finally:
+        sock.close()
+    return ip
+
+
 def auto_discover_host():
     """
     Attempt to automatically discover the host machine by pinging
@@ -158,6 +150,7 @@ def auto_discover_host():
         Check if url is the correct host server.
         """
         try:
+            log.info(f'Trying url: {url}')
             # Make request
             params = {
                 'id': ''.join(random.choice(string.ascii_letters) for _ in range(10))
@@ -175,8 +168,7 @@ def auto_discover_host():
     log.info('Performing automatic host discovery...')
 
     # Find subnet from host ip
-    subnet = socket.gethostbyname(
-        socket.gethostname()).split('.')[0:-1]
+    subnet = get_ip().split('.')[0:-1]
 
     # Assume network is /24 (possible IPs from 1-255)
     addr = range(1, 256)
@@ -205,149 +197,26 @@ def auto_discover_host():
             f'Using auto-discovered host at url: {os.getenv("HOST_URL")}')
 
 
-def start_spraying():
+def disconnect_clean():
     """
-    Main logic for overall spray program.
+    Ensures all connections and devices are closed allowing for a clean shutdown or reconnection.
     """
+    log.info('Attempting a clean disconnect...')
+    s.stop_spraying()
 
-    # Enable frame capture
-    t_cap = Thread(target=cam.start_capture)
-    t_cap.start()
+    # Wait for spraying thread to finish
+    time.sleep(2)
 
-    # Start tracking movement
-    t_track = Thread(target=cam.start_track)
-    t_track.start()
+    log.info('Disconnecting camera')
+    s.cam.cam.close()
 
-    prev_point = (0, 0)
+    log.info('Disconnecting Arduino')
+    s.servo.a.shutdown()
 
-    start_time = time.time()
+    # Ensure everything is closed properly
+    time.sleep(2)
 
-    if os.environ.get('DEBUG_TRACK').lower() in ['true', 't', '1']:
-        import shutil
-
-        for path in ['original', 'corrected']:
-            if os.path.isdir(path):
-                shutil.rmtree(path)
-
-            os.mkdir(path)
-
-        frame_count = 0
-
-    # Keep spraying while spraying is active
-    while len(spray.queue):
-        log.info('Spraying')
-
-        # Clear previous buffer
-        cam.clear_buffer()
-
-        # Wait for the first frame to capture
-        while cam.first_frame is None:
-            time.sleep(0.01)
-
-        # Perform inference
-        bbox = cam.get_inference(cam.first_frame)
-
-        # Check that the request was successful
-        if bbox is None:
-            continue
-
-        # Check if any detections were made
-        if bbox['count'] == 0:
-            log.info('No detections found! Not bothering to continue this frame.')
-
-            # Wait until next frame should be captured
-            time.sleep(inference_wait -
-                       ((time.time() - start_time) % inference_wait))
-
-            continue
-
-        if os.environ.get('DEBUG_TRACK').lower() in ['true', 't', '1']:
-            # Save frames for debugging
-            original_inference = cam.draw_bounding_boxes(cam.first_frame, bbox)
-            bbox = servo.correct_bbox(bbox)
-            corrected_inference = cam.draw_bounding_boxes(
-                cam.frame_buffer.get(), bbox)
-
-            cam.write_image(original_inference,
-                            f'original/{frame_count:04}.jpg')
-            cam.write_image(corrected_inference,
-                            f'corrected/{frame_count:04}.jpg')
-
-            frame_count += 1
-
-        # Convert bounding boxes to centre points to spray
-        original_points = [servo.bbox2centre(
-            bbox['bounding_boxes'][i]) for i in range(bbox['count'])]
-
-        # Order points starting at the bottom (largest y)
-        ordered_points = sorted(
-            original_points, key=lambda point: point[1], reverse=True)
-
-        # Spray each point
-        total_spray_start_time = time.time()
-        for point in ordered_points:
-
-            # Check if spraying has been disabled
-            if not len(spray.queue):
-                break
-
-            # Check that spray time has not been exceeded
-            if time.time() > total_spray_start_time + servo.spray_total_time:
-                log.warning(
-                    'Ran out of time to spray all plants in this image')
-                log.warning(
-                    f'Consider increasing SPRAY_TOTAL_TIME if possible (currently: {servo.spray_total_time}s)')
-                break
-
-            # Do this twice to ensure initial spray is relatively accurate
-            for i in range(2):
-                # Make initial correction
-                new_point = servo.correct_point(point)
-
-                # Move sprayer to position
-                servo.goto_point(new_point, prev_point)
-                prev_point = new_point
-
-            # Start spraying
-            servo.spray(enable=True)
-
-            spray_start_time = time.time()
-
-            # Keep tracking while spraying
-            while time.time() < spray_start_time + servo.spray_per_plant:
-                new_point = servo.correct_point(point)
-                servo.goto_point(new_point, prev_point)
-                prev_point = new_point
-
-            # Stop spraying
-            servo.spray(enable=False)
-
-    # Stop spraying
-    servo.spray(enable=False)
-
-    # Terminate video stream
-    cam.active = False
-
-    # Wait for camera thread to terminate
-    t_cap.join()
-
-    # Wait for track thread to terminate
-    t_track.join()
-
-
-def stop_spraying():
-    """
-    Stop spraying immediately.
-    """
-    # Check if already spraying
-    if len(spray.queue):
-        # Clear spray queue
-        with spray.mutex:
-            spray.queue.clear()
-
-        log.info('Spraying disabled')
-    else:
-        log.info('Already not spraying.')
+    log.info('Everything is properly disconnected')
 
 
 if __name__ == "__main__":
