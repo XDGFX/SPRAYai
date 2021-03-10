@@ -48,7 +48,8 @@ class Camera():
         else:
             # self.cam = cv2.VideoCapture(0)
             self.cam = PiCamera()
-            self.raw_cap = PiRGBArray(self.cam)
+            self.cam.resolution = (640, 480)
+            self.raw_cap = PiRGBArray(self.cam, size=(640, 480))
 
         self.active = False
 
@@ -74,21 +75,25 @@ class Camera():
         self.active = True
 
         start_time = time.time()
-        frame_wait = 1 / int(os.getenv('FRAMERATE_TRACK'))
+        frame_wait = 1 / int(os.environ.get('FRAMERATE_TRACK'))
 
         while self.active:
+            # Capture frame
             self.cam.capture(self.raw_cap, format='bgr')
             frame = self.raw_cap.array
 
+            # Clear frame buffer for next frame
+            self.raw_cap.truncate(0)
+
             # Check frame was correctly read
-            if not frame:
+            if frame is None:
                 if os.environ.get('DEBUG_CAM').lower() in ['true', 't', '1']:
                     # Reload the video stream
                     self.cam = cv2.VideoCapture(str(
                         Path(__file__).parent.absolute() / '0000.mkv'))
 
                     continue
-                
+
                 else:
                     raise Exception('Unable to capture a frame!')
 
@@ -202,7 +207,7 @@ class Camera():
             return json.loads(response.text)
 
         except requests.exceptions.ReadTimeout as e:
-            log.error(e)
+            log.debug(e)
 
             return None
 
