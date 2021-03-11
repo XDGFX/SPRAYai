@@ -9,13 +9,20 @@ Callum Morrison, 2021
 """
 
 import json
-from threading import Thread, Lock
+from threading import Lock, Thread
 
 import redis
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO
 
+from app import logs, settings
+
+# Setup log
+log = logs.create_log('host')
+log = logs.append_redis(log, 'host', host='0.0.0.0')
+
 app = Flask(__name__)
+
 # sio = SocketIO(app, async_mode='threading')
 sio = SocketIO(app)
 
@@ -29,14 +36,13 @@ valid_namespaces = ["/pi", "/host", "/"]
 
 
 def serve():
-    sio.run(app, host='0.0.0.0', port='5040', debug=True)
+    sio.run(app, host='0.0.0.0', port='5040')
 
 
 def start_server():
-    serve()
-    # thread = Thread(target=serve)
-    # thread.start()
-    # print('Webserver started')
+    thread = Thread(target=serve)
+    thread.start()
+    log.info('Webserver started')
 
 
 # --- WEBSERVER ROUTES ---
@@ -45,7 +51,7 @@ def index():
     return render_template('index.html')
 
 
-@app.route('/discover')
+@app.route('/api/discover')
 def discover():
     from flask import __version__
     return jsonify({
@@ -56,8 +62,8 @@ def discover():
     })
 
 
-@app.route('/emit/<namespace>')
-def emit_pi(namespace=None):
+@app.route('/api/emit/<namespace>')
+def emit_request(namespace=None):
     """
     Emit custom command to a specific namespace
     REST API version
@@ -74,10 +80,34 @@ def emit_pi(namespace=None):
     if namespace not in valid_namespaces:
         return (f'Invalid namespace: {namespace}', 405)
 
-    print(f'Received emit request: {cmd} for namespace {namespace}')
+    log.debug(f'Received emit request: {cmd} for namespace {namespace}')
     sio.emit(cmd, namespace=namespace)
 
     return ('', 200)
+
+
+@app.route('/api/settings')
+def get_settings():
+    """
+    Return global settings. If param 'keys' is None, returns all keys.
+    Otherwise, only returns settings requested by 'keys'.
+    """
+    keys = request.args.get('keys')
+
+    # Return all settings by default
+    if keys is None:
+        return jsonify(settings.get_settings())
+    else:
+        keys = keys.split(',')
+
+        return_settings = []
+        all_settings = settings.get_settings()
+
+        for item in all_settings:
+            if item.get('key') in keys:
+                return_settings.append(item)
+
+        return jsonify(return_settings)
 
 
 # --- WEBSOCKET ROUTES ---
@@ -93,7 +123,7 @@ def register_client(client):
     client_list.append(client)
     connections[request.sid] = index
 
-    print(f'Registered client: {client}')
+    log.info(f'Registered client: {client}')
 
     r.set('client_list', json.dumps(client_list))
     r.set('connections', json.dumps(connections))
@@ -102,41 +132,35 @@ def register_client(client):
 
 
 @sio.event(namespace='/pi')
+@sio.event(namespace='/host')
 def connect():
-    print(f'{request.sid} just connected to /pi')
+    log.info(f'{request.sid} just connected to {request.namespace}')
 
 
 @sio.event(namespace='/pi')
-def disconnect():
-    print(f'{request.sid} has disconnected from /pi')
-
-    redis_lock.acquire()
-    client_list = json.loads(r.get('client_list'))
-    connections = json.loads(r.get('connections'))
-
-    # Remove that client from the client_list
-    try:
-        index = connections[request.sid]
-        del connections[request.sid]
-        del client_list[index]
-
-        r.set('client_list', json.dumps(client_list))
-        r.set('connections', json.dumps(connections))
-    except IndexError:
-        print('A client disconnected before it was fully registered.')
-        print(f'sid: {request.sid}')
-
-    redis_lock.release()
-
-
-@sio.event(namespace='/host')
-def connect():
-    print(f'{request.sid} just connected to /host')
-
-
 @sio.event(namespace='/host')
 def disconnect():
-    print(f'{request.sid} has disconnected from /host')
+    log.info(f'{request.sid} has disconnected from {request.namespace}')
+
+    if request.namespace == '/pi':
+        redis_lock.acquire()
+        client_list = json.loads(r.get('client_list'))
+        connections = json.loads(r.get('connections'))
+
+        # Remove that client from the client_list
+        try:
+            index = connections[request.sid]
+            del connections[request.sid]
+            del client_list[index]
+
+            r.set('client_list', json.dumps(client_list))
+            r.set('connections', json.dumps(connections))
+
+        except (KeyError, IndexError):
+            log.warning(
+                f'A client disconnected before it was fully registered. ({request.sid})')
+
+        redis_lock.release()
 
 
 @sio.event(namespace='/host')
@@ -150,15 +174,17 @@ def emit(data):
     namespace = data['namespace']
 
     if not (cmd and namespace):
-        print('Missing command or namespace')
+        log.warning('Missing command or namespace')
+        return
 
     # Add leading slash
     namespace = f"/{namespace}"
 
     if namespace not in valid_namespaces:
-        print(f'Invalid namespace: {namespace}')
+        log.warning(f'Invalid namespace: {namespace}')
+        return
 
-    print(f'Received emit request: {cmd} for namespace {namespace}')
+    log.debug(f'Received emit request: {cmd} for namespace {namespace}')
     sio.emit(cmd, namespace=namespace)
 
 

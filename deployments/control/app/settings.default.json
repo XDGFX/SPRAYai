@@ -1,0 +1,113 @@
+[
+    {
+        "type": "heading",
+        "label": "Performance"
+    },
+    {
+        "type": "number",
+        "label": "Inference Timeout",
+        "key": "INFERENCE_TIMEOUT",
+        "min": 10,
+        "max": 5000,
+        "int": 10,
+        "value": 400,
+        "default": 400,
+        "unit": "ms",
+        "desc": "How long to wait for a response from the inference server before continuing."
+    },
+    {
+        "type": "number",
+        "label": "Inference Framerate",
+        "key": "FRAMERATE_INFERENCE",
+        "min": 1,
+        "max": 90,
+        "int": 1,
+        "value": 3,
+        "default": 3,
+        "unit": "fps",
+        "desc": "The target framerate for performing inference."
+    },
+    {
+        "type": "number",
+        "label": "Tracking Framerate",
+        "key": "FRAMERATE_TRACK",
+        "min": 1,
+        "max": 90,
+        "int": 1,
+        "value": 10,
+        "default": 10,
+        "unit": "fps",
+        "desc": "The target framerate for tracking motion while waiting for inference."
+    },
+    {
+        "type": "heading",
+        "label": "Servo"
+    },
+    {
+        "type": "number",
+        "label": "Spray Per Plant",
+        "key": "SPRAY_PER_PLANT",
+        "min": 0.01,
+        "max": 10,
+        "int": 0.01,
+        "value": 0.1,
+        "default": 0.1,
+        "unit": "s",
+        "desc": "How long each plant should be sprayed for per inference pass."
+    },
+    {
+        "type": "number",
+        "label": "Spray Total Time",
+        "key": "SPRAY_TOTAL_TIME",
+        "min": 0.01,
+        "max": 10,
+        "int": 0.01,
+        "value": 1,
+        "default": 1,
+        "unit": "s",
+        "desc": "The total time to spend spraying for each inference pass."
+    },
+    {
+        "type": "number",
+        "label": "Servo Angle Rate",
+        "key": "SPRAY_ANGLE_RATE",
+        "min": 1,
+        "max": 5000,
+        "int": 1,
+        "value": 240,
+        "default": 240,
+        "unit": "deg/s",
+        "desc": "The rotational speed of the servos."
+    },
+    {
+        "type": "number",
+        "label": "Angle Distance Multiplier",
+        "key": "SPRAY_DIST2ANGLE",
+        "min": 0.01,
+        "max": 100,
+        "int": 0.01,
+        "value": 0.25,
+        "default": 0.25,
+        "desc": "The multiplier to get from distance to angle."
+    },
+    {
+        "type": "heading",
+        "label": "Debugging"
+    },
+    {
+        "type": "bool",
+        "label": "Debug Mode (Tracking)",
+        "key": "DEBUG_TRACK",
+        "value": false,
+        "default": false,
+        "desc": "Enable debug mode for motion tracking."
+    },
+    {
+        "type": "bool",
+        "label": "Debug Mode (Camera)",
+        "key": "DEBUG_CAM",
+        "value": false,
+        "default": false,
+        "desc": "Enable debug mode for the camera."
+    }
+]
