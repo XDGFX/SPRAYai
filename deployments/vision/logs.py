@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-vision/logs.py
+logs.py
 
 General log handling and formatting.
 
@@ -9,6 +9,9 @@ Callum Morrison, 2021
 
 import logging
 import os
+import re
+
+import redis
 
 
 class CustomFormatter(logging.Formatter):
@@ -37,8 +40,33 @@ class CustomFormatter(logging.Formatter):
         return formatter.format(record)
 
 
+class RedisLogHandler():
+    def __init__(self, redis_key, host):
+        self.formatter = logging.Formatter(
+            '%(asctime)s--%(name)s--%(levelname)s--%(message)s')
+        self.redis_list_key = 'log--' + redis_key
+        self.level = logging.DEBUG
+
+        # Create Redis connection
+        host_url = host or re.search('([\d.]+):',
+                                     os.environ.get('HOST_URL')).groups()[0]
+        self.redis = redis.Redis(host=host_url, port='6379', db=0)
+
+    def handle(self, record):
+        try:
+            self.redis.lpush(self.redis_list_key,
+                             self.formatter.format(record))
+            self.redis.ltrim(self.redis_list_key, 0,
+                             int(os.environ.get('REDIS_LOG_LENGTH') or 10000))
+        except:
+            # Not much can be done, likely Redis is not accessible
+            pass
+
+
 def create_log(name):
-    # Create logger
+    """
+    Create the default stream logger
+    """
     log = logging.getLogger(name)
 
     if os.environ.get("LOG_LEVEL") == "DEBUG":
@@ -54,4 +82,15 @@ def create_log(name):
     ch.setFormatter(CustomFormatter())
 
     log.addHandler(ch)
+
+    return log
+
+
+def append_redis(log, redis_key, host=None):
+    """
+    Append the Redis log handler to an existing log.
+    """
+    rh = RedisLogHandler(redis_key=redis_key, host=host)
+    log.addHandler(rh)
+
     return log

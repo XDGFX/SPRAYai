@@ -16,6 +16,7 @@ from threading import Thread
 from dotenv import load_dotenv
 
 import logs
+import util
 
 # Setup log
 log = logs.create_log(__name__)
@@ -27,19 +28,19 @@ load_dotenv(dotenv_path=env_path)
 # Initialise spraying queue
 spray_queue = queue.Queue(maxsize=1)
 
-inference_wait = 1 / float(os.getenv('FRAMERATE_INFERENCE'))
-
 
 class Spray():
-    def __init__(self, sid):
+    def __init__(self, sid, log):
         import vision
+        self.log = log
 
         # Initialise camera
-        self.cam = vision.Camera(sid=sid)
+        self.cam = vision.Camera(sid=sid, log=log)
 
         # Initialise servos
         self.servo = vision.Servo(
             sid=sid,
+            log=log,
             img_width=self.cam.cam.resolution[0],
             img_height=self.cam.cam.resolution[1]
         )
@@ -51,7 +52,7 @@ class Spray():
 
         # Check if already spraying
         if len(spray_queue.queue):
-            log.info('Already spraying!')
+            self.log.info('Already spraying!')
             return
 
         # Clear the queue in a thread-safe manner
@@ -60,6 +61,8 @@ class Spray():
 
         # Put something in the queue to trigger spraying
         spray_queue.put(True)
+
+        inference_wait = 1 / float(util.get_setting('FRAMERATE_INFERENCE'))
 
         # Enable frame capture
         t_cap = Thread(target=self.cam.start_capture)
@@ -73,7 +76,7 @@ class Spray():
 
         start_time = time.time()
 
-        if os.environ.get('DEBUG_TRACK').lower() in ['true', 't', '1']:
+        if util.get_setting('DEBUG_TRACK'):
             import shutil
 
             for path in ['original', 'corrected']:
@@ -84,7 +87,7 @@ class Spray():
 
             frame_count = 0
 
-        log.info('Spraying...')
+        self.log.info('Spraying...')
 
         # Keep spraying while spraying is active
         while len(spray_queue.queue):
@@ -105,7 +108,7 @@ class Spray():
 
             # Check if any detections were made
             if bbox['count'] == 0:
-                log.debug(
+                self.log.debug(
                     'No detections found! Not bothering to continue this frame.')
 
                 # Wait until next frame should be captured
@@ -114,9 +117,9 @@ class Spray():
 
                 continue
 
-            log.info(bbox)
+            self.log.info(bbox)
 
-            if os.environ.get('DEBUG_TRACK').lower() in ['true', 't', '1']:
+            if util.get_setting('DEBUG_TRACK').lower() in ['true', 't', '1']:
                 # Save frames for debugging
                 original_inference = self.cam.draw_bounding_boxes(
                     self.cam.first_frame, bbox)
@@ -149,9 +152,9 @@ class Spray():
 
                 # Check that spray time has not been exceeded
                 if time.time() > total_spray_start_time + self.servo.spray_total_time:
-                    log.warning(
+                    self.log.warning(
                         'Ran out of time to spray all plants in this image')
-                    log.warning(
+                    self.log.warning(
                         f'Consider increasing SPRAY_TOTAL_TIME if possible (currently: {self.servo.spray_total_time}s)')
                     break
 
@@ -200,6 +203,6 @@ class Spray():
             with spray_queue.mutex:
                 spray_queue.queue.clear()
 
-            log.info('Spraying disabled')
+            self.log.info('Spraying disabled')
         else:
-            log.info('Already not spraying.')
+            self.log.info('Already not spraying.')

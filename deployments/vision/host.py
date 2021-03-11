@@ -32,12 +32,16 @@ sio = socketio.Client()
 # --- SOCKETIO CONNECTION EVENTS ---
 @sio.event(namespace='/pi')
 def connect():
-    log.info("Connected to host!")
-
     sid = sio.get_sid(namespace='/pi')
 
+    # Attach Redis to log handler
+    global log
+    log = logs.append_redis(log, redis_key=socket.gethostname())
+
+    log.info("Connected to host!")
+
     global s
-    s = spray.Spray(sid=sid)
+    s = spray.Spray(sid=sid, log=log)
 
     client = {
         "sid": sid,
@@ -93,27 +97,27 @@ def connect_to_host():
 
     while not connected:
 
-        if connection_attempts > 10:
-            log.critical(
-                f'Unable to connect to the host at {os.getenv("HOST_URL")} after {connection_attempts} tries.')
-            raise SystemExit
+        if connection_attempts >= 10:
+            log.error(
+                f'Unable to connect to the host at {os.environ.get("HOST_URL")} after {connection_attempts} tries.')
+            auto_discover_host()
 
         try:
             # Check if host url has been defined
-            if not os.getenv('HOST_URL'):
+            if not os.environ.get('HOST_URL'):
                 auto_discover_host()
 
             # Connect to the /pi namespace for Pi specific commands
-            sio.connect(os.getenv('HOST_URL'), namespaces='/pi')
+            sio.connect(os.environ.get('HOST_URL'), namespaces='/pi')
             connected = True
 
         except Exception as e:
             connection_attempts += 1
             log.error(e)
             log.warning(
-                f'Unable to connect to the WebSocket server at {os.getenv("HOST_URL")}')
+                f'Unable to connect to the WebSocket server at {os.environ.get("HOST_URL")}')
             log.warning(
-                f'Attempting to reconnect (Attempt: {connection_attempts})')
+                f'Attempting to reconnect (Attempt: {connection_attempts}/10)')
 
             time.sleep(1)
 
@@ -132,6 +136,44 @@ def get_ip():
     finally:
         sock.close()
     return ip
+
+
+def update_env(key, value):
+    """
+    Update the .env file with a new key, value pair. Overwrites identical keys, or appends if the key doesn't exist.
+    """
+    env_exists = Path(env_path).is_file()
+    env_updated = False
+
+    if env_exists:
+        with open(env_path, 'r') as f:
+            data = f.readlines()
+
+        # Check if key already exists
+        for index, line in enumerate(data):
+
+            # Add trailing newline to all lines
+            if not line.endswith('\n'):
+                data[index] = line + '\n'
+
+            if line.startswith(key):
+                # Update existing value
+                data[index] = f'{key}={value}\n'
+                env_updated = True
+                break
+
+        if not env_updated:
+            data.append(f'{key}={value}\n')
+
+    else:
+        # File doesn't exist yet
+        data = [f'{key}={value}\n']
+
+    with open(env_path, 'w') as f:
+        f.writelines(data)
+
+    # Reload the environment variables
+    load_dotenv(dotenv_path=env_path, override=True)
 
 
 def auto_discover_host():
@@ -162,9 +204,9 @@ def auto_discover_host():
             return r.json()['id'] == f'navvy_{params["id"]}'
 
         except Exception as e:
+            log.debug(e)
             return False
 
-    log.info('No host url supplied in environment variables')
     log.info('Performing automatic host discovery...')
 
     # Find subnet from host ip
@@ -174,7 +216,7 @@ def auto_discover_host():
     addr = range(1, 256)
     port = '5040'
     ips = [
-        f"http://{'.'.join(subnet)}.{x}:{port}/discover" for x in addr]
+        f"http://{'.'.join(subnet)}.{x}:{port}/api/discover" for x in addr]
 
     # Ping endpoints 10 at a time for performance
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -183,18 +225,21 @@ def auto_discover_host():
 
         for future in as_completed(future_ip):
             if future.result():
+
+                # Assign correct IP to environment variable
                 ip = future_ip[future]
-                os.environ['HOST_URL'] = ip.rstrip('/discover')
-                break
+                update_env('HOST_URL', ip.rstrip('/api/discover'))
 
     # Check if a host was found
-    if not os.getenv('HOST_URL'):
-        log.critical(
-            'No host url was supplied and one was not found automatically.')
-        raise SystemExit
+    if not os.environ.get('HOST_URL'):
+        log.error(
+            'No host url was found automatically. Will retry in 5 seconds...')
+        time.sleep(5)
+        auto_discover_host()
+
     else:
         log.info(
-            f'Using auto-discovered host at url: {os.getenv("HOST_URL")}')
+            f'Using auto-discovered host at url: {os.environ.get("HOST_URL")}')
 
 
 def disconnect_clean():

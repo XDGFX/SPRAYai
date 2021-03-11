@@ -23,26 +23,30 @@ from picamera import PiCamera
 from picamera.array import PiRGBArray
 from pymata4 import pymata4
 
-import logs
-
-# Setup log
-log = logs.create_log(__name__)
+import util
 
 # Load environment variables
 env_path = Path(__file__).parent.absolute() / '.env'
 load_dotenv(dotenv_path=env_path)
 
 # Initialise Redis
-redis_url = re.match('([\d.]+):([\d]+)',
-                     os.environ.get('REDIS_URL')).groups()
-r = redis.Redis(host=redis_url[0], port=redis_url[1], db=0)
+host_url = re.search('([\d.]+):',
+                     os.environ.get('HOST_URL')).groups()[0]
+r = redis.Redis(host=host_url, port='6379', db=0)
+
+inference_url = 'http://' + host_url + ':5040'
 
 
 class Camera():
-    def __init__(self, sid):
+    def __init__(self, sid, log):
+        # Setup logs
+        self.log = log
+
+        # Redis configuration
         self.movement_key = f'movement--{sid}'
 
-        if os.environ.get('DEBUG_CAM').lower() in ['true', 't', '1']:
+        # Setup camera
+        if util.get_setting('DEBUG_CAM'):
             self.cam = cv2.VideoCapture(str(
                 Path(__file__).parent.absolute() / '0000.mkv'))
         else:
@@ -70,12 +74,12 @@ class Camera():
         """
         Start scheduled capture from the camera at a defined framerate.
         """
-        log.info('Starting frame capture.')
+        self.log.info('Starting frame capture.')
 
         self.active = True
 
         start_time = time.time()
-        frame_wait = 1 / int(os.environ.get('FRAMERATE_TRACK'))
+        frame_wait = 1 / int(util.get_setting('FRAMERATE_TRACK'))
 
         while self.active:
             # Capture frame
@@ -87,7 +91,7 @@ class Camera():
 
             # Check frame was correctly read
             if frame is None:
-                if os.environ.get('DEBUG_CAM').lower() in ['true', 't', '1']:
+                if util.get_setting('DEBUG_CAM'):
                     # Reload the video stream
                     self.cam = cv2.VideoCapture(str(
                         Path(__file__).parent.absolute() / '0000.mkv'))
@@ -115,13 +119,13 @@ class Camera():
         while self.active:
             # Make sure queue doesn't get too long
             queue_length = len(self.frame_buffer.queue)
-            if queue_length > int(os.getenv('FRAMERATE_TRACK')):
-                log.warning(
+            if queue_length > int(util.get_setting('FRAMERATE_TRACK')):
+                self.log.warning(
                     f'Length of frame queue is getting long ({queue_length})!. Check that the processor is not overwhelmed.')
 
             # Make sure track error count is not too long
             if self.track_err_count >= 3:
-                log.error(
+                self.log.error(
                     f'Unable to track {self.track_err_count} frames in a row! There may be an issue with the camera')
 
             # If frame_buffer was recently cleared, wait for re-initialisation
@@ -164,7 +168,7 @@ class Camera():
                 # Extract rotation angle
                 da = np.arctan2(m[0][1][0], m[0][0][0])
 
-                # log.debug(
+                # self.log.debug(
                 #     f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
 
                 old_movement = json.loads(r.get(self.movement_key))
@@ -177,7 +181,7 @@ class Camera():
                 self.prev_frame = new_frame
 
             except Exception as e:
-                log.debug('Failed to calculate transformation', e)
+                self.log.debug('Failed to calculate transformation', e)
                 self.track_err_count += 1
 
     def get_inference(self, img):
@@ -187,7 +191,7 @@ class Camera():
         @return
         bbox        json list of bounding boxes
         """
-        url = os.getenv('INFERENCE_URL') + '/api/detect'
+        url = inference_url + '/api/detect'
 
         # Prepare headers for http request
         headers = {'content-type': 'image/jpeg'}
@@ -201,13 +205,18 @@ class Camera():
                 url,
                 data=img_encoded.tostring(),
                 headers=headers,
-                timeout=int(os.getenv('INFERENCE_TIMEOUT')) / 1000
+                timeout=int(util.get_setting('INFERENCE_TIMEOUT')) / 1000
             )
 
-            return json.loads(response.text)
+            if response.status_code == 200:
+                return json.loads(response.text)
+            else:
+                self.log.error(
+                    f'Unexpected status code: {response.status_code}')
+                return None
 
         except requests.exceptions.ReadTimeout as e:
-            log.debug(e)
+            self.log.debug(e)
 
             return None
 
@@ -237,7 +246,10 @@ class Camera():
 
 
 class Servo():
-    def __init__(self, sid, img_width, img_height):
+    def __init__(self, sid, log, img_width, img_height):
+
+        # Setup log
+        self.log = log
 
         # Setup general parameters
         self.movement_key = f'movement--{sid}'
@@ -251,15 +263,15 @@ class Servo():
         self.spray_pin = 5
 
         # Servo parameters
-        self.spray_per_plant = float(os.environ.get(
+        self.spray_per_plant = float(util.get_setting(
             'SPRAY_PER_PLANT')) or 0.25     # seconds
-        self.spray_total_time = float(os.environ.get(
+        self.spray_total_time = float(util.get_setting(
             'SPRAY_TOTAL_TIME')) or 3       # seconds
-        self.spray_angle_rate = float(os.environ.get(
+        self.spray_angle_rate = float(util.get_setting(
             'SPRAY_ANGLE_RATE')) or 240     # degrees per second
 
         # Multiplier to get from distance to angle, may change this to tan(angle) = dist / height
-        self.spray_dist2angle = float(os.environ.get(
+        self.spray_dist2angle = float(util.get_setting(
             'SPRAY_DIST2ANGLE')) or 5
 
         # Setup Arduino output and set to vertical
@@ -301,7 +313,7 @@ class Servo():
         """
         Prints the current movement position
         """
-        log.info(json.loads(r.get(self.movement_key)))
+        self.log.info(json.loads(r.get(self.movement_key)))
 
     def correct_bbox(self, bbox):
         """
