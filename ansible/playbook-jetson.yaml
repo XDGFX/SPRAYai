@@ -25,6 +25,20 @@
             gateway 192.168.0.1
             dns-nameservers 1.1.1.1 1.0.0.1
 
+    - name: Set WiFi access point
+      copy:
+        src: templates/SPRAYai_ap
+        dest: /etc/NetworkManager/system-connections/SPRAYai-37ebde24-06d9-421d-9069-51a7ad5f5312
+        mode: '600'
+        owner: root
+        group: root
+
+    - name: Restart network manager
+      ansible.builtin.systemd:
+        state: restarted
+        daemon_reload: yes
+        name: NetworkManager
+
     - name: Install other applications
       apt:
         name:
