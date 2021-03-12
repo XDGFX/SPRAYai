@@ -76,6 +76,7 @@ $text-strong-dark: white;
 $red: hsl(0, 100%, 51%);
 $yellow: hsl(56, 100%, 51%);
 $green: hsl(135, 100%, 51%);
+$primary: white;
 
 // Other Bulma modifications
 $switch-focus: 0px;
@@ -132,7 +133,7 @@ html {
     box-shadow: none;
     border: 1px solid $scheme-main;
     background-color: unset;
-    margin: 0rem 0rem 0rem 0rem;
+    margin: 0rem 1.5rem 0rem 0rem;
     padding: 0.5rem 0.5rem 0.5rem 0.5rem;
     width: 140px;
     height: 140px;
@@ -239,4 +240,20 @@ p {
 .switch[type="checkbox"] + label::before, .switch[type="checkbox"] + label::before {
     background-color: unset;
     border: 1px solid $scheme-main;
+}
+
+.is-checkradio[type="radio"] + label::after, .is-checkradio[type="radio"] + label::after, .is-checkradio[type="checkbox"] + label::after, .is-checkradio[type="checkbox"] + label::after {
+    top: unset;
+}
+
+.is-checkradio[type="radio"] + label::before, .is-checkradio[type="radio"] + label::before, .is-checkradio[type="checkbox"] + label::before, .is-checkradio[type="checkbox"] + label::before {
+    top: unset;
+}
+
+.is-checkradio[type="radio"] + label {
+    padding-left: 5rem;
+}
+
+.switch[type="checkbox"] + label {
+    padding-left: 5rem;
 }

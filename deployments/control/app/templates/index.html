@@ -67,25 +67,24 @@
                                 <label for="switch_auto_spray">Automatic</label>
                             </div>
                             <div class="field">
-                                <input class="is-checkradio" id="exampleRadioInline1" type="radio"
-                                    name="exampleRadioInline" checked="checked">
-                                <label for="exampleRadioInline1">Option 1</label>
+                                <input class="is-checkradio" id="radio_spray_start" type="radio" name="radio_spray"
+                                    onclick="socket.emit('spray', true)" {% if spraying %} checked="checked" {% endif
+                                    %}>
+                                <label for="radio_spray_start">Start</label>
                             </div>
 
                             <div class="field">
-                                <input class="is-checkradio" id="exampleRadioInline2" type="radio"
-                                    name="exampleRadioInline">
-                                <label for="exampleRadioInline2">Option 2</label>
+                                <input class="is-checkradio" id="radio_spray_stop" type="radio" name="radio_spray"
+                                    onclick="socket.emit('spray', false)" {% if not spraying %} checked="checked" {%
+                                    endif %}>
+                                <label for="radio_spray_stop">Stop</label>
                             </div>
+
+                            {{ live_updater('spraying') | safe }}
                         </div>
                     </div>
 
                 </div>
-
-                <button class="button" onclick='socket.emit("emit", {"cmd": "spray_enable", "namespace": "pi"})'>Start
-                    spraying</button>
-                <button class="button" onclick='socket.emit("emit", {"cmd": "spray_disable", "namespace": "pi"})'>Stop
-                    spraying</button>
             </div>
         </div>
 

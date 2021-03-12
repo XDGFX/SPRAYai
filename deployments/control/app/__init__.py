@@ -20,7 +20,7 @@ import redis
 from flask import Flask, jsonify, render_template, request
 from flask_socketio import SocketIO
 
-from app import logs, settings
+from app import logs, settings, util
 
 # Setup log
 log = logs.create_log('host')
@@ -39,9 +39,11 @@ r.set('connections', json.dumps({}))
 
 valid_namespaces = ["/pi", "/host", "/"]
 
+updater = util.LiveUpdater()
+
 
 def serve():
-    sio.run(app, host='0.0.0.0', port='5040', debug=True)
+    sio.run(app, host='0.0.0.0', port='5040')
 
 
 def start_server():
@@ -59,17 +61,15 @@ def index():
         drive = [line.split(' ')[0] for line in f.readlines()
                  if line.split(' ')[1] == '/'][0]
     usage = shutil.disk_usage('/')
-    uptime = re.search('(\d+) hours, (\d+) minutes',
-                       subprocess.check_output(['uptime', '-p'], encoding='UTF-8')).groups()
 
     properties = {
         "FIRMWARE": __version__,
         "EDITION": "beta",
         "UPDATE": "n/a",
         "DISK USAGE": f"{drive} {round(usage.used / usage.total * 100)}%",
-        "UPTIME": f"{uptime[0]}h {uptime[1]}m"
+        "UPTIME": updater.uptime
     }
-    return render_template('index.html', properties=properties)
+    return render_template('index.html', properties=properties, spraying=int(r.get('spraying')))
 
 
 @app.route('/test')
@@ -134,6 +134,26 @@ def get_settings():
                 return_settings.append(item)
 
         return jsonify(return_settings)
+
+
+# --- LIVE UPDATER ---
+@app.context_processor
+def utility_processor():
+    def live_updater(variable_name):
+        """
+        Returns the bespoke JavaScript code for auto-updating a variable with name `variable_name`.
+        """
+        return updater._code(variable_name)
+    return dict(live_updater=live_updater)
+
+
+@sio.event(namespace='/host')
+def live_updater(variable_name):
+    """
+    Echos the value of property `variable_name` saved in the live updater class over WebSocket.
+    """
+    sio.emit(f"live_updater:{variable_name}", getattr(
+        updater, variable_name), namespace="/host")
 
 
 # --- WEBSOCKET ROUTES ---
@@ -212,6 +232,22 @@ def emit(data):
 
     log.debug(f'Received emit request: {cmd} for namespace {namespace}')
     sio.emit(cmd, namespace=namespace)
+
+
+@sio.event(namespace='/host')
+def spray(do_spray):
+    """
+    Start or stop spraying.
+    """
+
+    if do_spray:
+        log.info('Received request to start spraying')
+        r.set('spraying', 1)
+        sio.emit('spray_enable', namespace='/pi')
+    else:
+        log.info('Received request to stop spraying')
+        r.set('spraying', 0)
+        sio.emit('spray_disable', namespace='/pi')
 
 
 if __name__ == '__main__':
