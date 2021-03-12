@@ -8,7 +8,12 @@ Flask-based API webserver to handle control over the Navvy smart sprayer.
 Callum Morrison, 2021
 """
 
+__version__ = "1.0.0"
+
 import json
+import re
+import shutil
+import subprocess
 from threading import Lock, Thread
 
 import redis
@@ -36,19 +41,40 @@ valid_namespaces = ["/pi", "/host", "/"]
 
 
 def serve():
-    sio.run(app, host='0.0.0.0', port='5040')
+    sio.run(app, host='0.0.0.0', port='5040', debug=True)
 
 
 def start_server():
-    thread = Thread(target=serve)
-    thread.start()
-    log.info('Webserver started')
+    serve()
+    # thread = Thread(target=serve)
+    # thread.start()
+    # log.info('Webserver started')
 
 
 # --- WEBSERVER ROUTES ---
 @app.route('/')
 def index():
-    return render_template('index.html')
+    with open('/proc/mounts', 'r') as f:
+        # Get disk for root directory '/'
+        drive = [line.split(' ')[0] for line in f.readlines()
+                 if line.split(' ')[1] == '/'][0]
+    usage = shutil.disk_usage('/')
+    uptime = re.search('(\d+) hours, (\d+) minutes',
+                       subprocess.check_output(['uptime', '-p'], encoding='UTF-8')).groups()
+
+    properties = {
+        "FIRMWARE": __version__,
+        "EDITION": "beta",
+        "UPDATE": "n/a",
+        "DISK USAGE": f"{drive} {round(usage.used / usage.total * 100)}%",
+        "UPTIME": f"{uptime[0]}h {uptime[1]}m"
+    }
+    return render_template('index.html', properties=properties)
+
+
+@app.route('/test')
+def test():
+    return render_template('test.html')
 
 
 @app.route('/api/discover')

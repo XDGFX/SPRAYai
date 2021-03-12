@@ -2,16 +2,95 @@
 <html>
 
 <head>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom_bulma.css') }}">
-    <script src=" {{ url_for('static', filename='src/socket.io.min.js' ) }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bulma.css') }}">
+    <script src=" {{ url_for('static', filename='dependencies/socket.io.min.js' ) }}"></script>
     <script src="{{ url_for('static', filename='js/connect.js') }}"></script>
+
+    <link rel="apple-touch-icon" sizes="180x180"
+        href="{{ url_for('static', filename='img/favicon/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="{{ url_for('static', filename='img/favicon/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16"
+        href="{{ url_for('static', filename='img/favicon/favicon-16x16.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='img/favicon/site.webmanifest') }}">
+    <link rel="mask-icon" href="{{ url_for('static', filename='img/favicon/safari-pinned-tab.svg') }}" color="#000000">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon/favicon.ico') }}">
+    <meta name="msapplication-TileColor" content="#000000">
+    <meta name="msapplication-config" content="{{ url_for('static', filename='img/favicon/browserconfig.xml') }}">
+    <meta name="theme-color" content="#ffffff">
+
+    <title>SPRAYai</title>
 </head>
 
 <body class="is-family-primary">
-    <button onclick='socket.emit("emit", {"cmd": "spray_enable", "namespace": "pi"})'>Start spraying</button>
-    <button onclick='socket.emit("emit", {"cmd": "spray_disable", "namespace": "pi"})'>Stop spraying</button>
 
-    <p>Something old</p>
+    <section class="section">
+
+        <div class="columns main">
+            <div class="column is-one-third">
+
+                <img class="image mb-6" src="{{ url_for('static', filename='img/sprayai-logo-dark.svg') }}"></img>
+
+                <div class="box-container">
+                    {% for key, value in properties.items() %}
+                    <div class="box">
+                        <p class="is-6"><strong>{{key}}:</strong> {{ value }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <button class="button is-fullwidth has-text-left">
+                    <span>Settings</span>
+                    <span class="icon is-small">
+                        <i class="fal fa-arrow-right"></i>
+                    </span>
+                </button>
+
+            </div>
+            <div class="column is-one-third">
+                <div class="box-container">
+                    <div class="box">
+                        <p class="is-6"><strong>Controls</strong></p>
+                    </div>
+                </div>
+
+                <div class="columns">
+                    <div class="column is-narrow">
+                        <div class="box square">
+                            <p class="is-6"><strong>Spray</strong></p>
+                        </div>
+                    </div>
+                    <div class="column">
+                        <div class="vertical-fill">
+                            <div class="field">
+                                <input id="switch_auto_spray" type="checkbox" name="switch_auto_spray" class="switch">
+                                <label for="switch_auto_spray">Automatic</label>
+                            </div>
+                            <div class="field">
+                                <input class="is-checkradio" id="exampleRadioInline1" type="radio"
+                                    name="exampleRadioInline" checked="checked">
+                                <label for="exampleRadioInline1">Option 1</label>
+                            </div>
+
+                            <div class="field">
+                                <input class="is-checkradio" id="exampleRadioInline2" type="radio"
+                                    name="exampleRadioInline">
+                                <label for="exampleRadioInline2">Option 2</label>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <button class="button" onclick='socket.emit("emit", {"cmd": "spray_enable", "namespace": "pi"})'>Start
+                    spraying</button>
+                <button class="button" onclick='socket.emit("emit", {"cmd": "spray_disable", "namespace": "pi"})'>Stop
+                    spraying</button>
+            </div>
+        </div>
+
+    </section>
+
 
 
 </body>
