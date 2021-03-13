@@ -11,15 +11,13 @@ Callum Morrison, 2021
 __version__ = "1.0.0"
 
 import json
-import re
-import shutil
-import subprocess
+import os
 import time
-from logging import debug
 from threading import Lock, Thread
 
 import redis
-from flask import Flask, Response, abort, jsonify, render_template, request
+from flask import (Flask, Response, abort, jsonify, render_template, request,
+                   session)
 from flask_socketio import SocketIO
 
 from app import logs, settings, util
@@ -45,6 +43,7 @@ updater = util.LiveUpdater(log)
 
 
 def serve():
+    app.secret_key = os.urandom(12)
     # sio.run(app, host='0.0.0.0', port='5040', debug=True)
     sio.run(app, host='0.0.0.0', port='5040')
 
@@ -60,6 +59,10 @@ def start_server():
 # --- WEBSERVER ROUTES ---
 @app.route('/')
 def index():
+    # Check if user is logged in
+    if not session.get('logged_in'):
+        return ("Log in pls", 403)
+
     usage = updater.usage()
     properties = {
         "FIRMWARE": __version__,
@@ -68,6 +71,12 @@ def index():
         "DISK USAGE": f"{usage[0]} {usage[1]}%"
     }
     return render_template('index.html', properties=properties, spraying=int(r.get('spraying')), client_list=json.loads(r.get('client_list')))
+
+
+@app.route('/login')
+def login():
+    session['logged_in'] = True
+    return "Logged in!"
 
 
 @app.route('/test')
