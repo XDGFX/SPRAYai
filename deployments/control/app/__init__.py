@@ -14,10 +14,12 @@ import json
 import re
 import shutil
 import subprocess
+import time
+from logging import debug
 from threading import Lock, Thread
 
 import redis
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, abort, jsonify, render_template, request
 from flask_socketio import SocketIO
 
 from app import logs, settings, util
@@ -39,37 +41,33 @@ r.set('connections', json.dumps({}))
 
 valid_namespaces = ["/pi", "/host", "/"]
 
-updater = util.LiveUpdater()
+updater = util.LiveUpdater(log)
 
 
 def serve():
+    # sio.run(app, host='0.0.0.0', port='5040', debug=True)
     sio.run(app, host='0.0.0.0', port='5040')
 
 
 def start_server():
+    sio.start_background_task(target=heartbeat)
+
     serve()
-    # thread = Thread(target=serve)
-    # thread.start()
-    # log.info('Webserver started')
+    # start_in_thread(serve)
+    log.info('Webserver started')
 
 
 # --- WEBSERVER ROUTES ---
 @app.route('/')
 def index():
-    with open('/proc/mounts', 'r') as f:
-        # Get disk for root directory '/'
-        drive = [line.split(' ')[0] for line in f.readlines()
-                 if line.split(' ')[1] == '/'][0]
-    usage = shutil.disk_usage('/')
-
+    usage = updater.usage()
     properties = {
         "FIRMWARE": __version__,
         "EDITION": "beta",
         "UPDATE": "n/a",
-        "DISK USAGE": f"{drive} {round(usage.used / usage.total * 100)}%",
-        "UPTIME": updater.uptime
+        "DISK USAGE": f"{usage[0]} {usage[1]}%"
     }
-    return render_template('index.html', properties=properties, spraying=int(r.get('spraying')))
+    return render_template('index.html', properties=properties, spraying=int(r.get('spraying')), client_list=json.loads(r.get('client_list')))
 
 
 @app.route('/test')
@@ -136,6 +134,35 @@ def get_settings():
         return jsonify(return_settings)
 
 
+@app.route('/api/logs')
+def get_logs():
+    """
+    Get the text file of all logs for the host with query parameter 'hostname'.
+    """
+    hostname = request.args.get('hostname')
+
+    # The number of lines to return, default: 1000 if not provided.
+    lines = request.args.get('lines') or 1000
+
+    # Check that a hostname was requested
+    if hostname is None:
+        abort(400)
+
+    logs = r.lrange(f"log--{hostname}", 0, lines)
+
+    # Wrap into a generator so the whole list isn't generated at once
+    def generate():
+        for line in logs:
+            yield line.decode() + "\n"
+
+    return Response(
+        generate(),
+        mimetype="text/log",
+        headers={"Content-disposition":
+                 f"attachment; filename={hostname}.log"}
+    )
+
+
 # --- LIVE UPDATER ---
 @app.context_processor
 def utility_processor():
@@ -152,13 +179,36 @@ def live_updater(variable_name):
     """
     Echos the value of property `variable_name` saved in the live updater class over WebSocket.
     """
-    sio.emit(f"live_updater:{variable_name}", getattr(
+    sio.emit(f"live_updater_{variable_name}", getattr(
         updater, variable_name), namespace="/host")
+
+
+# --- HEARTBEAT ---
+def heartbeat():
+    """
+    Measure the latency of connected clients intermittently.
+    """
+    while True:
+        ping_time = time.time()
+        sio.emit('ping', namespace='/pi')
+        r.set("ping_time", str(ping_time))
+
+        sio.sleep(3)
+
+
+@sio.event(namespace='/pi')
+def pong():
+    pong_time = time.time()
+    ping_time = float(r.get("ping_time"))
+    r.set(f"pong--{request.sid}", (pong_time - ping_time) / 2)
 
 
 # --- WEBSOCKET ROUTES ---
 @sio.event(namespace='/pi')
 def register_client(client):
+    """
+    Add a nozzle client to the Redis client database.
+    """
 
     redis_lock.acquire()
     client_list = json.loads(r.get('client_list'))
@@ -248,6 +298,19 @@ def spray(do_spray):
         log.info('Received request to stop spraying')
         r.set('spraying', 0)
         sio.emit('spray_disable', namespace='/pi')
+
+
+@sio.event(namespace='/host')
+def nozzle_status(hostname):
+    """
+    Echos the current nozzle status for updating the UI.
+    """
+    try:
+        sio.emit(f"nozzle_status_{hostname}",
+                 json.dumps(updater.nozzles(hostname)[0]), namespace="/host")
+    except IndexError:
+        # The device is no longer connected, ignore the request.
+        pass
 
 
 if __name__ == '__main__':
