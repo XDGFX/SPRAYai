@@ -56,6 +56,8 @@ class RedisLogHandler():
         try:
             self.redis.lpush(self.redis_list_key,
                              self.formatter.format(record))
+            self.redis.ltrim(self.redis_list_key, 0,
+                             int(os.environ.get('REDIS_LOG_LENGTH') or 10000))
         except:
             # Not much can be done, likely Redis is not accessible
             pass
@@ -67,10 +69,7 @@ def create_log(name):
     """
     log = logging.getLogger(name)
 
-    if os.environ.get("LOG_LEVEL") == "DEBUG":
-        log.setLevel(logging.DEBUG)
-    else:
-        log.setLevel(logging.INFO)
+    log.setLevel(logging.DEBUG)
 
     # Add streamhandler to logger
     ch = logging.StreamHandler()
