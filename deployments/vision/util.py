@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-utils.py
+vision/utils.py
 
 General utilities which may be used in any module.
 

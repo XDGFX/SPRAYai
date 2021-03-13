@@ -47,7 +47,8 @@ def connect():
         "sid": sid,
         "hostname": socket.gethostname(),
         "addr": get_ip(),
-        "conn_time": round(time.time())
+        "conn_time": round(time.time()),
+        "latency": -1
     }
 
     log.info(client)
@@ -85,6 +86,11 @@ def spray_disable():
     except NameError:
         log.error(
             'A spray request was received before the device has been registered. Wait a few seconds and try again.')
+
+
+@sio.event(namespace='/pi')
+def ping():
+    sio.emit('pong', namespace='/pi')
 
 
 # --- MAIN FUNCTIONS ---

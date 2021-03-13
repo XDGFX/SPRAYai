@@ -69,10 +69,7 @@ def create_log(name):
     """
     log = logging.getLogger(name)
 
-    if os.environ.get("LOG_LEVEL") == "DEBUG":
-        log.setLevel(logging.DEBUG)
-    else:
-        log.setLevel(logging.INFO)
+    log.setLevel(logging.DEBUG)
 
     # Add streamhandler to logger
     ch = logging.StreamHandler()
