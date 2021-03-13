@@ -101,6 +101,15 @@ html {
     background-size: cover;
 }
 
+a {
+    color: $scheme-main;
+    font-weight: $weight-bold;
+}
+
+a:hover {
+    color: $link-hover-dark;
+}
+
 .section {
     padding: 4rem;
     margin: 4rem;
@@ -142,6 +151,48 @@ html {
     align-items: center;
 }
 
+.box.has-icon {
+    display: flex;
+}
+
+.box.has-icon {
+    display: flex;
+}
+
+.box.has-icon > p {
+    flex: 1;
+}
+
+.box.has-icon > a {
+    color: $scheme-main;
+}
+
+// .box.has-icon > a:hover {
+//     color: $blue;
+// }
+
+.icon-spin:hover {
+    transform-origin: center;
+    animation-duration: 1s;
+    animation-timing-function: ease-in-out;
+    animation-delay: 0s;
+    animation-direction: normal;
+    animation-fill-mode: none;
+    animation-play-state: running;
+    animation-name: icon-spin; 
+}
+
+@keyframes icon-spin {
+  0% {
+    transform: rotate(0deg); }
+  100% {
+    transform: rotate(360deg); } 
+}
+
+.box-container:not(:first-of-type) {
+    margin-top: 3rem;
+}
+
 .vertical-fill {
     display: flex;
     flex-direction: column;
@@ -172,7 +223,7 @@ hr {
     letter-spacing: 0.25em;
 }
 
-p {
+p, a:not(.icon) {
     text-transform: uppercase;
     letter-spacing: 0.25em;
 }

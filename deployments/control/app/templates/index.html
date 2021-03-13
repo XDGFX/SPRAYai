@@ -37,6 +37,9 @@
                         <p class="is-6"><strong>{{key}}:</strong> {{ value }}</p>
                     </div>
                     {% endfor %}
+                    <div class="box">
+                        <p class="is-6"><strong>Uptime:</strong> {{ live_updater('uptime') | safe }}</p>
+                    </div>
                 </div>
 
                 <button class="button is-fullwidth has-text-left">
@@ -48,6 +51,7 @@
 
             </div>
             <div class="column is-one-third">
+
                 <div class="box-container">
                     <div class="box">
                         <p class="is-6"><strong>Controls</strong></p>
@@ -63,7 +67,8 @@
                     <div class="column">
                         <div class="vertical-fill">
                             <div class="field">
-                                <input id="switch_auto_spray" type="checkbox" name="switch_auto_spray" class="switch">
+                                <input id="switch_auto_spray" type="checkbox" name="switch_auto_spray" class="switch"
+                                    disabled>
                                 <label for="switch_auto_spray">Automatic</label>
                             </div>
                             <div class="field">
@@ -79,12 +84,102 @@
                                     endif %}>
                                 <label for="radio_spray_stop">Stop</label>
                             </div>
+                        </div>
+                    </div>
+                </div>
 
-                            {{ live_updater('spraying') | safe }}
+                <div class="box-container">
+                    <div class="box has-icon">
+                        <p class="is-6">
+                            <strong>Nozzles</strong>
+                        </p>
+                        <a onclick="document.location.reload()" class="icon icon-spin">
+                            <i class="fal fa-redo"></i>
+                        </a>
+                    </div>
+                </div>
+
+                {% if client_list|length == 0 %}
+                <p class="title">
+                    <span>
+                        <i class="fal fa-unlink"></i>
+                    </span>
+                    <span>
+                        No clients
+                    </span>
+                </p>
+                {% else %}
+                {% for client in client_list %}
+                <div class="columns">
+                    <div class="column is-narrow">
+                        <div class="box square">
+                            <p class="is-6"><strong>{{ client['hostname'] }}</strong></p>
                         </div>
                     </div>
 
+                    <div class="column">
+                        <div class="vertical-fill">
+                            <div class="field">
+                                <p id="nozzle_status_connection_{{ client['hostname'] }}"></p>
+                            </div>
+                            <div class="field">
+                                <p id="nozzle_status_latency_{{ client['hostname'] }}"></p>
+                            </div>
+                            <div class="field">
+                                <a href="/api/logs?hostname={{ client['hostname'] }}"
+                                    id="nozzle_status_logs_{{ client['hostname'] }}">View logs</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        // Perform initial request
+                        socket.emit("nozzle_status", "{{ client['hostname'] }}")
+
+                        // Function to update span text
+                        socket.on("nozzle_status_{{ client['hostname'] }}", data => {
+                            {
+                                document.getElementById("nozzle_status_connection_{{ client['hostname'] }}").innerText = JSON.parse(data)["connection"];
+                                document.getElementById("nozzle_status_latency_{{ client['hostname'] }}").innerText = JSON.parse(data)["latency"];
+                            }
+                        });
+
+                        // Function to update variable at polling_rate
+                        setInterval(function () {
+                            {
+                                socket.emit("nozzle_status", "{{ client['hostname'] }}")
+                            }
+                        }, 3000);
+                    </script>
                 </div>
+                {% endfor %}
+                {% endif %}
+
+            </div>
+
+            <div class="column is-one-third">
+
+                <div class="box-container">
+                    <div class="box">
+                        <p class="is-6"><strong>State</strong></p>
+                    </div>
+                </div>
+
+                <p class="title">
+                    <span>
+                        <i class="fal fa-sprinkler"></i>
+                    </span>
+                    <span>
+                        {{ live_updater('spraying') | safe }}
+                    </span>
+                </p>
+
+                <div class="box-container">
+                    <div class="box">
+                        <p class="is-6"><strong>Performance</strong></p>
+                    </div>
+                </div>
+
             </div>
         </div>
 
