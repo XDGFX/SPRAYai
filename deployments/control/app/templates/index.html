@@ -4,7 +4,9 @@
 <head>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bulma.css') }}">
     <script src=" {{ url_for('static', filename='dependencies/socket.io.min.js' ) }}"></script>
+    <script src=" {{ url_for('static', filename='dependencies/chart.min.js' ) }}"></script>
     <script src="{{ url_for('static', filename='js/connect.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/generate_charts.js') }}"></script>
 
     <link rel="apple-touch-icon" sizes="180x180"
         href="{{ url_for('static', filename='img/favicon/apple-touch-icon.png') }}">
@@ -178,6 +180,14 @@
                     <div class="box">
                         <p class="is-6"><strong>Performance</strong></p>
                     </div>
+                </div>
+
+                <div class="charts">
+                    <canvas id="chart_performance_1" width="400" height="180"></canvas>
+                    <p class="mb-6">Time Active (h)</p>
+
+                    <canvas id="chart_performance_2" width="400" height="180"></canvas>
+                    <p>est. Pesticide Saved (%)</p>
                 </div>
 
             </div>
