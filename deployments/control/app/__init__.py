@@ -10,14 +10,16 @@ Callum Morrison, 2021
 
 __version__ = "1.0.0"
 
+import crypt
 import json
 import os
 import time
+from hmac import compare_digest
 from threading import Lock, Thread
 
 import redis
-from flask import (Flask, Response, abort, jsonify, render_template, request,
-                   session)
+from flask import (Flask, Response, abort, jsonify, redirect, render_template,
+                   request, session)
 from flask_socketio import SocketIO
 
 from app import logs, settings, util
@@ -39,13 +41,17 @@ r.set('connections', json.dumps({}))
 
 valid_namespaces = ["/pi", "/host", "/"]
 
+valid_logins = {
+    "admin": "$6$08qess8qYJJwcgQv$4M3qmg1U.Rt5yQU8GIt9wl6PCPaMoG5avQzVWnjVccRpfQcQZX7k.1lVMUeg14ZtQBt2pzm1NbsmOhqeavH1R/"
+}
+
 updater = util.LiveUpdater(log)
 
 
 def serve():
     app.secret_key = os.urandom(12)
-    # sio.run(app, host='0.0.0.0', port='5040', debug=True)
-    sio.run(app, host='0.0.0.0', port='5040')
+    sio.run(app, host='0.0.0.0', port='5040', debug=True)
+    # sio.run(app, host='0.0.0.0', port='5040')
 
 
 def start_server():
@@ -61,7 +67,8 @@ def start_server():
 def index():
     # Check if user is logged in
     if not session.get('logged_in'):
-        return ("Log in pls", 403)
+        error = request.args.get('login_error')
+        return render_template('login.html', error=error)
 
     usage = updater.usage()
     properties = {
@@ -73,10 +80,23 @@ def index():
     return render_template('index.html', properties=properties, spraying=int(r.get('spraying')), client_list=json.loads(r.get('client_list')))
 
 
-@app.route('/login')
+@app.route('/login', methods=['POST'])
 def login():
-    session['logged_in'] = True
-    return "Logged in!"
+    username = request.form.get('username').lower()
+    password = request.form.get('password')
+
+    password_hash = valid_logins.get(username)
+
+    if not password_hash:
+        return redirect("/?login_error=user_not_found")
+
+    match = compare_digest(crypt.crypt(password, password_hash), password_hash)
+
+    if match:
+        session['logged_in'] = True
+        return redirect("/")
+    else:
+        return redirect("/?login_error=password_match")
 
 
 @app.route('/test')
