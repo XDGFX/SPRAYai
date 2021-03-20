@@ -27659,14 +27659,21 @@ p, a:not(.icon) {
   padding-left: 5rem;
 }
 
-.is-100 {
+.dropdown, .dropdown-trigger, .dropdown-menu, .dropdown-content {
   width: 100%;
 }
 
 .dropdown-content {
-  width: 100;
   padding: 3rem;
   border: 1px solid #4a4a4a;
   box-shadow: unset;
   -webkit-box-shadow: unset;
+}
+
+.is-checkradio[type=checkbox] + label {
+  padding-left: 5rem;
+}
+
+.no-pointer {
+  cursor: unset;
 }

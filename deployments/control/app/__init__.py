@@ -55,7 +55,11 @@ def serve():
 
 
 def start_server():
+    # Start heartbeat for nozzles (ping)
     sio.start_background_task(target=heartbeat)
+
+    # Ensure spraying is disabled
+    spray(0)
 
     serve()
     # start_in_thread(serve)

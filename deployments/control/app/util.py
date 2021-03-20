@@ -78,11 +78,11 @@ class LiveUpdater():
         spraying_option = int(r.get('spraying'))
 
         if spraying_option == 1:
-            state = "Smart Spraying"
+            state = "SPRAY: SMART"
         elif spraying_option == 2:
-            state = "Blanket Spraying"
+            state = "SPRAY: BLANKET"
         else:
-            state = "Not Spraying"
+            state = "SPRAY: OFF"
 
         return state
 

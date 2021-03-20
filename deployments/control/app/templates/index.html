@@ -70,18 +70,20 @@
                         <div class="vertical-fill">
                             <div class="field">
                                 <input id="switch_smart_spray" type="checkbox" name="switch_smart_spray" class="switch"
-                                    checked="checked">
+                                    {% if spraying in [0, 1] %} checked="checked" {% endif %} {% if spraying in [1, 2]
+                                    %} disabled {% endif %}>
                                 <label for="switch_smart_spray">Smart Spray</label>
                             </div>
                             <div class="field">
                                 <input class="is-checkradio" id="radio_spray_start" type="radio" name="radio_spray"
-                                    onclick="start_spraying()" {% if spraying %} checked="checked" {% endif %}>
+                                    onclick="start_spraying()" {% if spraying in [1, 2] %} checked="checked" {% endif
+                                    %}>
                                 <label for="radio_spray_start">Start</label>
                             </div>
 
                             <div class="field">
                                 <input class="is-checkradio" id="radio_spray_stop" type="radio" name="radio_spray"
-                                    onclick="stop_spraying()" {% if not spraying %} checked="checked" {% endif %}>
+                                    onclick="stop_spraying()" {% if spraying in [0] %} checked="checked" {% endif %}>
                                 <label for="radio_spray_stop">Stop</label>
                             </div>
 
@@ -111,37 +113,42 @@
                     </div>
                 </div>
 
-                <div class="dropdown is-hoverable is-100 mt-5">
-                    <div class="dropdown-trigger is-100">
-                        <button class="button is-fullwidth has-text-left" aria-haspopup="true"
+                <div class="dropdown is-hoverable mt-5">
+                    <div class="dropdown-trigger">
+                        <div class="button is-fullwidth has-text-left no-pointer" aria-haspopup="true"
                             aria-controls="dropdown-menu">
-                            <span>Plant Selection</span>
+                            <span>Trigger Selection</span>
                             <span class="icon is-small">
                                 <i class="fal fa-caret-down" aria-hidden="true"></i>
                             </span>
-                        </button>
+                        </div>
                     </div>
-                    <div class="dropdown-menu" id="dropdown-menu is-100" role="menu">
+                    <div class="dropdown-menu" id="dropdown-menu" role="menu">
                         <div class="dropdown-content has-background">
                             <div class="field">
                                 <input class="is-checkradio dropdown-item" id="dropdown-dandelions" type="checkbox"
                                     name="dropdown-dandelions" checked="checked">
-                                <label for="dropdown-dandelions">Dandelions</label>
+                                <label class="label" for="dropdown-dandelions">Dandelions</label>
                             </div>
                             <div class="field">
-                                <input class="is-checkradio dropdown-item" id="dropdown-daffodils" type="checkbox"
-                                    name="dropdown-daffodils" disabled>
-                                <label for="dropdown-daffodils">Daffodils</label>
+                                <input class="is-checkradio dropdown-item" id="dropdown-virus-yellows" type="checkbox"
+                                    name="dropdown-virus-yellows" disabled>
+                                <label class="label" for="dropdown-virus-yellows">Virus Yellows</label>
                             </div>
                             <div class="field">
-                                <input class="is-checkradio dropdown-item" id="dropdown-ragwort" type="checkbox"
-                                    name="dropdown-ragwort" disabled>
-                                <label for="dropdown-ragwort">Ragwort</label>
+                                <input class="is-checkradio dropdown-item" id="dropdown-caterpillars" type="checkbox"
+                                    name="dropdown-caterpillars" disabled>
+                                <label class="label" for="dropdown-caterpillars">Caterpillars</label>
                             </div>
                             <div class="field">
-                                <input class="is-checkradio dropdown-item" id="dropdown-poppies" type="checkbox"
-                                    name="dropdown-poppies" disabled>
-                                <label for="dropdown-poppies">Poppies</label>
+                                <input class="is-checkradio dropdown-item" id="dropdown-mildew-strawberry"
+                                    type="checkbox" name="dropdown-mildew-strawberry" disabled>
+                                <label class="label" for="dropdown-mildew-strawberry">Mildew (Strawberry)</label>
+                            </div>
+                            <div class="field">
+                                <input class="is-checkradio dropdown-item" id="dropdown-mildew-raspberry"
+                                    type="checkbox" name="dropdown-mildew-raspberry" disabled>
+                                <label class="label" for="dropdown-mildew-raspberry">Mildew (Raspberry)</label>
                             </div>
                         </div>
                     </div>
