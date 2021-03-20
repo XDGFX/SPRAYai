@@ -314,15 +314,24 @@ def emit(data):
 
 
 @sio.event(namespace='/host')
-def spray(do_spray):
+def spray(option):
     """
     Start or stop spraying.
+
+    option:
+    0   Stop spraying
+    1   Start smart spraying
+    2   Start blanket spraying
     """
 
-    if do_spray:
-        log.info('Received request to start spraying')
+    if option == 1:
+        log.info('Received request to start smart spraying')
         r.set('spraying', 1)
         sio.emit('spray_enable', namespace='/pi')
+    elif option == 2:
+        log.info('Received request to start blanket spraying')
+        r.set('spraying', 2)
+        sio.emit('spray_enable_blanket', namespace='/pi')
     else:
         log.info('Received request to stop spraying')
         r.set('spraying', 0)

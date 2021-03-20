@@ -94,7 +94,7 @@ $fa-font-path: "../dependencies/fontawesome/webfonts";
 @import "../dependencies/fontawesome/scss/light.scss";
 
 // Background settings
-html {
+html, .has-background {
     background-image: url(../img/bg/2.png);
     background-repeat: no-repeat;
     background-attachment: fixed;
@@ -387,12 +387,20 @@ p, a:not(.icon) {
     border: 1px solid $scheme-main;
 }
 
-.is-checkradio[type="radio"] + label::after, .is-checkradio[type="radio"] + label::after, .is-checkradio[type="checkbox"] + label::after, .is-checkradio[type="checkbox"] + label::after {
+.is-checkradio[type="radio"] + label::after, .is-checkradio[type="radio"] + label::after{
     top: unset;
 }
 
-.is-checkradio[type="radio"] + label::before, .is-checkradio[type="radio"] + label::before, .is-checkradio[type="checkbox"] + label::before, .is-checkradio[type="checkbox"] + label::before {
+.is-checkradio[type="checkbox"] + label::after, .is-checkradio[type="checkbox"] + label::after {
+    top: 0.5rem;
+}
+
+.is-checkradio[type="radio"] + label::before, .is-checkradio[type="radio"] + label::before {
     top: unset;
+}
+
+.is-checkradio[type="checkbox"] + label::before, .is-checkradio[type="checkbox"] + label::before {
+    top: 0.2rem;
 }
 
 .is-checkradio[type="radio"] + label {
@@ -401,4 +409,16 @@ p, a:not(.icon) {
 
 .switch[type="checkbox"] + label {
     padding-left: 5rem;
+}
+
+.is-100 {
+    width: 100%;
+}
+
+.dropdown-content {
+    width: 100;
+    padding: 3rem;
+    border: 1px solid #4a4a4a;
+    box-shadow: unset;
+  	-webkit-box-shadow: unset;
 }

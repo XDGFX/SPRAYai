@@ -75,7 +75,16 @@ class LiveUpdater():
         """
         Returns 'Spraying' or 'Not spraying' according to the current system status.
         """
-        return "Spraying" if int(r.get('spraying')) else "Not spraying"
+        spraying_option = int(r.get('spraying'))
+
+        if spraying_option == 1:
+            state = "Smart Spraying"
+        elif spraying_option == 2:
+            state = "Blanket Spraying"
+        else:
+            state = "Not Spraying"
+
+        return state
 
     def usage(self):
         """
