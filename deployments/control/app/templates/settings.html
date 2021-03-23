@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bulma.css') }}">
+    <!-- <script src=" {{ url_for('static', filename='dependencies/socket.io.min.js' ) }}"></script>
+    <script src="{{ url_for('static', filename='js/connect.js') }}"></script> -->
+
+    <link rel="apple-touch-icon" sizes="180x180"
+        href="{{ url_for('static', filename='img/favicon/apple-touch-icon.png') }}">
+    <link rel="icon" type="image/png" sizes="32x32"
+        href="{{ url_for('static', filename='img/favicon/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16"
+        href="{{ url_for('static', filename='img/favicon/favicon-16x16.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='img/favicon/site.webmanifest') }}">
+    <link rel="mask-icon" href="{{ url_for('static', filename='img/favicon/safari-pinned-tab.svg') }}" color="#000000">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='img/favicon/favicon.ico') }}">
+    <meta name="msapplication-TileColor" content="#000000">
+    <meta name="msapplication-config" content="{{ url_for('static', filename='img/favicon/browserconfig.xml') }}">
+    <meta name="theme-color" content="#ffffff">
+
+    <title>SPRAYai</title>
+</head>
+
+<body class="is-family-primary">
+
+    <section class="section">
+        <form action="/settings" method="post">
+
+            <div class="columns main">
+                <div class="column is-one-third">
+                    <div class="fixed-sidebar">
+                        <img class="image mb-6"
+                            src="{{ url_for('static', filename='img/sprayai-logo-dark.svg') }}"></img>
+
+                        <div class="pb-5"></div>
+
+                        <button class="button is-fullwidth has-text-left mb-5" value="submit" type="submit">
+                            <span>Save Settings</span>
+                            <span class="icon is-small">
+                                <i class="fal fa-check"></i>
+                            </span>
+                        </button>
+
+                        <button class="button is-fullwidth has-text-left" value="cancel" name="cancel">
+                            <span>Discard Changes</span>
+                            <span class="icon is-small">
+                                <i class="fal fa-times"></i>
+                            </span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="column settings-container">
+
+                    {% for setting in settings %}
+
+                    {% if setting['type'] == 'heading' %}
+                    <div class="box-container">
+                        <div class="box">
+                            <p><strong>{{ setting['label'] }}</strong></p>
+                        </div>
+                    </div>
+
+                    {% elif setting['type'] == 'number' %}
+                    <div class="columns settings">
+                        <div class="column">
+                            <p><b>{{ setting['label'] }}</b></p>
+                            <p>{{ setting['desc'] }}</p>
+                        </div>
+                        <div class="column">
+                            <div class="field has-addons input-unit-parent">
+                                <div class="control is-fullwidth">
+                                    <input class="input" id="setting_{{ setting['key'] }}"
+                                        name="setting_{{ setting['key'] }}" type="number"
+                                        placeholder="{{ setting['value'] }}" min="{{ setting['min'] }}"
+                                        max="{{ setting['max'] }}">
+                                </div>
+                                <span class="input-unit is-narrow">{{ setting['unit'] }}</span>
+
+                            </div>
+
+                            {# JS syntax highlighting might have issues with the quotes in the below `onclick` element,
+                            but when the template is populated there is no syntax issues. #}
+
+                            <a class="has-text-right is-fullwidth button-default"
+                                onclick="document.getElementById('setting_{{ setting['key'] }}').value = {{ setting['default'] }}">Default</a>
+                        </div>
+                    </div>
+
+                    {% elif setting['type'] == 'bool' %}
+                    <div class="columns settings">
+                        <div class="column">
+                            <p><b>{{ setting['label'] }}</b></p>
+                            <p>{{ setting['desc'] }}</p>
+                        </div>
+                        <div class="column">
+                            <div class="columns">
+                                <div class="field column">
+                                    <input class="is-checkradio" id="setting_{{ setting['key'] }}" type="checkbox"
+                                        name="setting_{{ setting['key'] }}" {% if setting['value'] %} checked="checked"
+                                        {% endif %}>
+                                    <label for="setting_{{ setting['key'] }}">Enabled</label>
+                                </div>
+                                <div class="column">
+
+                                    {# JS syntax highlighting might have issues with the quotes in the below `onclick`
+                                    element, but when the template is populated there is no syntax issues. #}
+
+                                    <a class="has-text-right is-fullwidth button-default"
+                                        onclick="document.getElementById('setting_{{ setting['key'] }}').checked = {% if setting['default'] %} true {% else %} false {% endif %}">Default</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% endfor %}
+                </div>
+
+
+            </div>
+
+
+            </div>
+
+            {% for setting in settings %}
+
+            {% if setting["type"] in ["number"] %}
+
+            {% endif %}
+
+            {% endfor %}
+
+        </form>
+    </section>
+
+</body>
+
+</html>

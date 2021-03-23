@@ -44,12 +44,12 @@
                     </div>
                 </div>
 
-                <button class="button is-fullwidth has-text-left">
+                <a class="button is-fullwidth has-text-left" href="/settings">
                     <span>Settings</span>
                     <span class="icon is-small">
                         <i class="fal fa-arrow-right"></i>
                     </span>
-                </button>
+                </a>
 
             </div>
             <div class="column is-one-third">
@@ -69,9 +69,9 @@
                     <div class="column">
                         <div class="vertical-fill">
                             <div class="field">
-                                <input id="switch_smart_spray" type="checkbox" name="switch_smart_spray" class="switch"
-                                    {% if spraying in [0, 1] %} checked="checked" {% endif %} {% if spraying in [1, 2]
-                                    %} disabled {% endif %}>
+                                <input class="is-checkradio" id="switch_smart_spray" type="checkbox"
+                                    name="switch_smart_spray" {% if spraying in [0, 1] %} checked=" checked" {% endif %}
+                                    {% if spraying in [1, 2] %} disabled {% endif %}>
                                 <label for="switch_smart_spray">Smart Spray</label>
                             </div>
                             <div class="field">

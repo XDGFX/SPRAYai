@@ -68,7 +68,7 @@ def start_server():
 
 # --- WEBSERVER ROUTES ---
 @app.route('/')
-def index():
+def route_index():
     # Check if user is logged in
     if not session.get('logged_in'):
         error = request.args.get('login_error')
@@ -85,7 +85,7 @@ def index():
 
 
 @app.route('/login', methods=['POST'])
-def login():
+def route_login():
     username = request.form.get('username').lower()
     password = request.form.get('password')
 
@@ -103,13 +103,47 @@ def login():
         return redirect("/?login_error=password_match")
 
 
+@app.route('/settings', methods=['GET', 'POST'])
+def route_settings():
+    # Check if user is logged in
+    if not session.get('logged_in'):
+        error = request.args.get('login_error')
+        return render_template('login.html', error=error)
+
+    if request.method == "GET":
+        return render_template('settings.html', settings=settings.get_settings())
+
+    elif request.method == "POST":
+        # Check if submitted or canceled
+        cancel = request.form.get("cancel")
+
+        if cancel:
+            return redirect('/')
+
+        new_settings = {}
+
+        for setting, value in request.form.items():
+            if setting.startswith('setting_') and value:
+                # Convert to correct format
+                new_settings[setting[len('setting_'):].upper()] = value.upper()
+
+        # If any new settings exist
+        if new_settings:
+            settings.update_settings(new_settings)
+
+        return redirect('/')
+
+    else:
+        return (f"Unrecognised method: {request.method}", 405)
+
+
 @app.route('/test')
-def test():
+def route_test():
     return render_template('test.html')
 
 
 @app.route('/api/discover')
-def discover():
+def api_discover():
     from flask import __version__
     return jsonify({
         'ping': 'pong',
@@ -120,7 +154,7 @@ def discover():
 
 
 @app.route('/api/emit/<namespace>')
-def emit_request(namespace=None):
+def api_emit_request(namespace=None):
     """
     Emit custom command to a specific namespace
     REST API version
@@ -144,7 +178,7 @@ def emit_request(namespace=None):
 
 
 @app.route('/api/settings')
-def get_settings():
+def api_get_settings():
     """
     Return global settings. If param 'keys' is None, returns all keys.
     Otherwise, only returns settings requested by 'keys'.
@@ -168,7 +202,7 @@ def get_settings():
 
 
 @app.route('/api/logs')
-def get_logs():
+def api_get_logs():
     """
     Get the text file of all logs for the host with query parameter 'hostname'.
     """

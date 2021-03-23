@@ -300,7 +300,11 @@ a:hover {
     display: flex;
 }
 
-// Bulma styles overrides
+.is-fullwidth {
+    width: 100%;
+    display: inline-block;
+}
+
 hr {
     background-color: $scheme-main;
     height: 1px;
@@ -334,7 +338,7 @@ p, a:not(.icon) {
     font-weight: $weight-bold;
 }
 
-.label, .switch[type="checkbox"] + label, .is-checkradio[type="radio"] + label {
+.label, .switch[type="checkbox"] + label, .is-checkradio[type="checkbox"] + label, .is-checkradio[type="radio"] + label {
     font-weight: $weight-normal;
     text-transform: uppercase;
     letter-spacing: 0.25em;
@@ -393,6 +397,7 @@ p, a:not(.icon) {
 
 .is-checkradio[type="checkbox"] + label::after, .is-checkradio[type="checkbox"] + label::after {
     top: 0.5rem;
+    left: 0.55rem;
 }
 
 .is-checkradio[type="radio"] + label::before, .is-checkradio[type="radio"] + label::before {
@@ -428,4 +433,54 @@ p, a:not(.icon) {
 
 .no-pointer {
     cursor: unset;
+}
+
+.settings .column:first-of-type {
+    padding-right: 3rem;
+}
+
+.settings .column:last-of-type {
+    padding-left: 3rem;
+}
+
+.settings .field {
+    margin-bottom: unset;
+}
+
+.settings.columns:not(:last-of-type) {
+    padding-bottom: 2rem;
+}
+
+.fixed-sidebar {
+    position: sticky;
+    top: 3rem;
+}
+
+.input-unit {
+    font-weight: $weight-normal;
+    text-transform: uppercase;
+    letter-spacing: 0.25em;
+    position: absolute;
+    height: 2.5em;
+    display: flex;
+    align-items: center;
+    right: 0.75em;
+}
+
+.input-unit-parent {
+    position: relative;
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type=number] {
+  -moz-appearance: textfield;
+}
+
+.button-default {
+    padding-right: 0.75em;
 }

@@ -34,3 +34,24 @@ def set_settings(settings):
     """
     with settings_file.open('w+') as f:
         f.write(json.dumps(settings))
+
+
+def update_settings(new_settings):
+    """
+    Updates the current settings with new values.
+    """
+    new_dict = []
+
+    # Loop over current settings and apply changed values
+    for item in get_settings():
+        if item.get('key') in new_settings.keys():
+
+            if item['type'] == 'number':
+                item['value'] = float(new_settings[item['key']])
+
+            elif item['type'] == 'bool':
+                item['value'] = new_settings[item['key']] == "ON"
+
+        new_dict.append(item)
+
+    set_settings(new_dict)
