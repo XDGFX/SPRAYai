@@ -15,18 +15,18 @@ var days = new Array()
 
 // For some reason day 0 is Sunday...
 weekday = [
-    "S",
-    "M",
-    "T",
-    "W",
-    "T",
-    "F",
-    "S"
+    "SUN",
+    "MON",
+    "TUE",
+    "WED",
+    "THU",
+    "FRI",
+    "SAT"
 ]
 
 // Count back five days from today
 for (var i = 0; i < 6; i++) {
-    days[i] = weekday[(today - i) % 7]
+    days[i] = weekday[(today + i - 5 + 7) % 7]
 }
 
 // Setup chart style
