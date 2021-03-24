@@ -4,7 +4,7 @@
 
 # Callum Morrison, 2021
 
-FROM python:3.9
+FROM python:3.7
 
 # Install requirements
 COPY requirements.txt /tmp/requirements.txt

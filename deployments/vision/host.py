@@ -10,7 +10,9 @@ Callum Morrison, 2021
 
 import os
 import socket
+import sys
 import time
+import traceback
 from pathlib import Path
 
 import socketio
@@ -21,6 +23,15 @@ import spray
 
 # Setup log
 log = logs.create_log('host')
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    log.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
 
 # Load environment variables
 env_path = Path(__file__).parent.absolute() / '.env'
@@ -34,27 +45,33 @@ sio = socketio.Client()
 def connect():
     sid = sio.get_sid(namespace='/pi')
 
-    # Attach Redis to log handler
-    global log
-    log = logs.append_redis(log, redis_key=socket.gethostname())
+    # Any errors here are fatal
+    try:
+        # Attach Redis to log handler
+        global log
+        log = logs.append_redis(log, redis_key=socket.gethostname())
 
-    log.info("Connected to host!")
+        log.info("Connected to host!")
 
-    global s
-    s = spray.Spray(sid=sid, log=log)
+        global s
+        s = spray.Spray(sid=sid, log=log)
 
-    client = {
-        "sid": sid,
-        "hostname": socket.gethostname(),
-        "addr": get_ip(),
-        "conn_time": round(time.time()),
-        "latency": -1
-    }
+        client = {
+            "sid": sid,
+            "hostname": socket.gethostname(),
+            "addr": get_ip(),
+            "conn_time": round(time.time()),
+            "latency": -1
+        }
 
-    log.info(client)
+        log.info(client)
 
-    # Register this client with the host
-    sio.emit("register_client", client, namespace='/pi')
+        # Register this client with the host
+        sio.emit("register_client", client, namespace='/pi')
+        
+    except Exception:
+        log.fatal(traceback.format_exc())
+        raise SystemExit
 
 
 @sio.event(namespace='/pi')
