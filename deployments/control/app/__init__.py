@@ -50,8 +50,8 @@ updater = util.LiveUpdater(log)
 
 def serve():
     app.secret_key = os.urandom(12)
-    sio.run(app, host='0.0.0.0', port='5040', debug=True)
-    # sio.run(app, host='0.0.0.0', port='5040')
+    # sio.run(app, host='0.0.0.0', port='5040', debug=True)
+    sio.run(app, host='0.0.0.0', port='5040')
 
 
 def start_server():
@@ -174,7 +174,7 @@ def api_emit_request(namespace=None):
     log.debug(f'Received emit request: {cmd} for namespace {namespace}')
     sio.emit(cmd, namespace=namespace)
 
-    return ('', 200)
+    return (f'Sent "{cmd}" on namespace: {namespace}', 200)
 
 
 @app.route('/api/settings')
