@@ -26,7 +26,7 @@ from app import logs, settings, util
 
 # Setup log
 log = logs.create_log('host')
-log = logs.append_redis(log, 'host', host='0.0.0.0')
+log = logs.append_redis(log, 'host')
 
 app = Flask(__name__)
 
@@ -34,7 +34,8 @@ app = Flask(__name__)
 sio = SocketIO(app)
 
 # Initialise redis client database
-r = redis.Redis(host='0.0.0.0', port='6379', db=0)
+r = redis.Redis(os.environ.get('REDIS_HOST') or '0.0.0.0', port='6379', db=0)
+
 redis_lock = Lock()
 r.set('client_list', json.dumps([]))
 r.set('connections', json.dumps({}))
