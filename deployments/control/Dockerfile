@@ -16,4 +16,6 @@ COPY run.py /run.py
 
 EXPOSE 5040
 
+ENV REDIS_HOST=redis
+
 CMD ["python", "/run.py"]
