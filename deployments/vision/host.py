@@ -10,6 +10,7 @@ Callum Morrison, 2021
 
 import os
 import socket
+import sys
 import time
 import traceback
 from pathlib import Path
@@ -22,6 +23,15 @@ import spray
 
 # Setup log
 log = logs.create_log('host')
+
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    log.critical("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
 
 # Load environment variables
 env_path = Path(__file__).parent.absolute() / '.env'
@@ -58,6 +68,7 @@ def connect():
 
         # Register this client with the host
         sio.emit("register_client", client, namespace='/pi')
+        
     except Exception:
         log.fatal(traceback.format_exc())
         raise SystemExit
