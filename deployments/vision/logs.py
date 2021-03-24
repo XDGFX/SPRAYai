@@ -48,8 +48,16 @@ class RedisLogHandler():
         self.level = logging.DEBUG
 
         # Create Redis connection
-        host_url = host or re.search('([\d.]+):',
-                                     os.environ.get('HOST_URL')).groups()[0]
+        if host:
+            host_url = host
+        elif os.environ.get('REDIS_HOST'):
+            host_url = os.environ.get('REDIS_HOST')
+        elif os.environ.get('HOST_URL'):
+            host_url = re.search(
+                '([\d.]+):', os.environ.get('HOST_URL')).groups()[0]
+        else:
+            host_url = '0.0.0.0'
+
         self.redis = redis.Redis(host=host_url, port='6379', db=0)
 
     def handle(self, record):
