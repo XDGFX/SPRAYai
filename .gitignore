@@ -145,5 +145,5 @@ datasets/
 # Redis database
 *.rdb
 
-*/navvy_rsa
+*/SPRAYai
 settings.json

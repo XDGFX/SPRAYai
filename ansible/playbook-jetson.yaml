@@ -39,6 +39,10 @@
         daemon_reload: yes
         name: NetworkManager
 
+    - name: Wait for network to be back up
+      wait_for_connection:
+        timeout: 10
+
     - name: Install other applications
       apt:
         name:
@@ -56,6 +60,12 @@
         - libffi-dev
 
         state: latest
+
+    - name: Set text mode
+      file:
+        src: /lib/systemd/system/multi-user.target
+        dest: /etc/systemd/system/default.target
+        state: link
 
     # --- Install Docker ---
     - name: Add Docker GPG apt Key
@@ -109,7 +119,7 @@
 
     - name: Upload SSH key
       copy:
-        src: ../keys/navvy_rsa.pub
+        src: ../keys/SPRAYai.pub
         dest: "~{{ inventory_hostname }}/.ssh/authorized_keys"
         owner: "{{ inventory_hostname }}"
         group: "{{ inventory_hostname }}"
@@ -117,8 +127,8 @@
 
     - name: Clone latest repo
       ansible.builtin.git:
-        repo: https://github.com/XDGFX/navvy-spray-ai.git
-        dest: "/home/{{ inventory_hostname }}/navvy-spray-ai"
+        repo: https://github.com/XDGFX/SPRAYai.git
+        dest: "/home/{{ inventory_hostname }}/SPRAYai"
 
     # --- Docker setup ---
     - name: Set default Docker runtime to Nvidia
@@ -126,12 +136,22 @@
         src: templates/docker-daemon-jetson.json
         dest: /etc/docker/daemon.json
 
+    - name: Start redis container
+      docker_container:
+        name: redis
+        image: redis
+        command: redis-server --bind 0.0.0.0
+        state: started
+        restart_policy: always
+        published_ports:
+          - 6379:6379
+
     - name: Build inference container (This might take a very long time!)
       docker_image:
         name: yolov4
         tag: v1
         build:
-          path: "/home/{{ inventory_hostname }}/navvy-spray-ai/deployments/detector"
+          path: "/home/{{ inventory_hostname }}/SPRAYai/deployments/detector"
         source: build
         state: present
 
@@ -144,18 +164,28 @@
         published_ports:
           - 5050:5050
 
-    - name: Start redis container
+    - name: Build control container
+      docker_image:
+        name: control
+        tag: v1
+        build:
+          path: "/home/{{ inventory_hostname }}/SPRAYai/deployments/control"
+        source: build
+        state: present
+
+    - name: Start control container
       docker_container:
-        name: redis
-        image: redis
-        command: redis-server
+        name: control
+        image: control:v1
         state: started
         restart_policy: always
         published_ports:
-          - 6379:6379
+          - 5040:5040
 
-    - name: Set text mode
-      file:
-        src: /lib/systemd/system/multi-user.target
-        dest: /etc/systemd/system/default.target
-        state: link
+    - name: Create SPRAYai network
+      docker_network:
+        name: SPRAYai
+        connected:
+          - redis
+          - inference
+          - control

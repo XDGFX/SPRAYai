@@ -1,0 +1,11 @@
+[Unit]
+Description=SPRAYai vision
+After=multi-user.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/home/pi/SPRAYai/deployments/vision/.venv/bin/python3 /home/pi/SPRAYai/deployments/vision/host.py
+
+[Install]
+WantedBy=multi-user.target

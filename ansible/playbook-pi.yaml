@@ -22,53 +22,83 @@
 #         Enable serial interface
 
 ---
-  - name: ansible-pi
-    hosts: pis
-    become: yes
-    tasks:
+- name: ansible-pi
+  hosts: pis
+  become: yes
+  tasks:
 
-      - name: Update all packages
-        apt:
-          upgrade: yes
-          update_cache: yes
-          cache_valid_time: 3600
+    - name: Update all packages
+      apt:
+        upgrade: yes
+        update_cache: yes
+        cache_valid_time: 3600
 
-      - name: Set the 'pi#' hostname
-        ansible.builtin.hostname:
-          name: "{{ inventory_hostname }}"
+    - name: Set the 'pi#' hostname
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
 
-      - name: Install other applications
-        apt:
-          name:
-          - python3-pip
-          - python3-venv
-          - python3-picamera
-          - vim
-          - fish
-          - git
-          state: latest
+    - name: Install other applications
+      apt:
+        name:
+        - python3-pip
+        - python3-venv
+        - python3-picamera
+        - vim
+        - fish
+        - git
+        state: latest
 
-      - name: Setup 'pi' user
-        user:
-          name: pi
-          shell: /usr/bin/fish
-          # Default password is 'pi'
-          password: $6$Rz0gU/c.zPT$ry6DmU6pV1FsGCvyTH4ToN4bM5MWPfLuLCfLfJamc66HQLQqtKzGRmdvth8tl.UhK/O8Ahslo49WenFujA0U/1
-          groups: dialout,sudo,audio,video,plugdev,netdev
-          append: yes
+    # --- User configuration ---
+    - name: Setup 'pi' user
+      user:
+        name: pi
+        shell: /usr/bin/fish
+        # Default password is 'pi'
+        password: $6$Rz0gU/c.zPT$ry6DmU6pV1FsGCvyTH4ToN4bM5MWPfLuLCfLfJamc66HQLQqtKzGRmdvth8tl.UhK/O8Ahslo49WenFujA0U/1
+        groups: dialout,sudo,audio,video,plugdev,netdev
+        append: yes
 
-      - name: Create .ssh folder
-        file:
-          path: ~pi/.ssh
-          state: directory
-          owner: pi
-          group: pi
-          mode: 0700
+    - name: Create .ssh folder
+      file:
+        path: /home/pi/.ssh
+        state: directory
+        owner: pi
+        group: pi
+        mode: 0700
 
-      - name: Upload SSH key
-        copy:
-          src: ../keys/navvy_rsa.pub
-          dest: ~pi/.ssh/authorized_keys
-          owner: pi
-          group: pi
-          mode: 0700
+    - name: Upload SSH key
+      copy:
+        src: ../keys/SPRAYai.pub
+        dest: /home/pi/.ssh/authorized_keys
+        owner: pi
+        group: pi
+        mode: 0700
+
+    - name: Clone latest repo
+      become_user: pi
+      ansible.builtin.git:
+        repo: https://github.com/XDGFX/SPRAYai.git
+        dest: "/home/pi/SPRAYai"
+
+    # --- Program setup ---
+    - name: Create virtual environment
+      become_user: pi
+      pip: 
+        requirements: /home/pi/SPRAYai/deployments/vision/requirements.txt
+        virtualenv: /home/pi/SPRAYai/deployments/vision/.venv
+        virtualenv_command: /usr/bin/python3 -m venv
+
+    - name: Install SPRAYai vision systemd service
+      copy:
+        src: templates/SPRAYai_vision.service
+        dest: /etc/systemd/system/SPRAYai_vision.service
+        mode: '755'
+        owner: root
+        group: root
+
+    - name: start SPRAYai vision systemd service
+      systemd:
+        state: started
+        name: SPRAYai_vision
+        enabled: yes
+        daemon_reload: yes
