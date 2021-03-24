@@ -19,6 +19,7 @@ import numpy as np
 import redis
 import requests
 from dotenv import load_dotenv
+from gpiozero import DigitalOutputDevice
 from picamera import PiCamera
 from picamera.array import PiRGBArray
 from pymata4 import pymata4
@@ -209,7 +210,22 @@ class Camera():
             )
 
             if response.status_code == 200:
-                return json.loads(response.text)
+                # Convert bbox from [x1, y1, x2, y2] to [x, y, w, h]
+                bbox = json.loads(response.text)
+
+                for i in range(bbox['count']):
+                    box = bbox['bounding_boxes'][i]
+
+                    # Find width and height
+                    w = box[2] - box[0]
+                    h = box[3] - box[1]
+
+                    # Apply back to original variable
+                    bbox['bounding_boxes'][i][2] = w
+                    bbox['bounding_boxes'][i][3] = h
+
+                return bbox
+
             else:
                 self.log.error(
                     f'Unexpected status code: {response.status_code}')
@@ -246,7 +262,7 @@ class Camera():
 
 
 class Servo():
-    def __init__(self, sid, log, img_width, img_height):
+    def __init__(self, sid, log, img_width=None, img_height=None):
 
         # Setup log
         self.log = log
@@ -257,10 +273,14 @@ class Servo():
         self.img_height = img_height
 
         # Arduino setup
-        self.a = pymata4.Pymata4()
+        self.a = pymata4.Pymata4(com_port='/dev/ttyS0', baud_rate=57600)
         self.servo_pin_x = 9
         self.servo_pin_y = 10
         self.spray_pin = 5
+
+        # Alternative RPi spray pin setup
+        self.pi_spray = DigitalOutputDevice(
+            pin=23, active_high=True, initial_value=False)
 
         # Servo parameters
         self.spray_per_plant = float(util.get_setting(
@@ -308,6 +328,11 @@ class Servo():
         Enable or disable the spray nozzle.
         """
         self.a.digital_pin_write(self.spray_pin, enable)
+
+        if enable:
+            self.pi_spray.on()
+        else:
+            self.pi_spray.off()
 
     def print_movement(self):
         """
@@ -440,3 +465,20 @@ class Servo():
         y = rho * np.sin(phi)
 
         return(x, y)
+
+    def system_test(self):
+        """
+        Test all physical systems sequentially.
+        """
+        self.log.info("Testing servos")
+
+        for i in [45, 20, 70, 45]:
+            self.a.servo_write(self.servo_pin_x, i)
+            self.a.servo_write(self.servo_pin_y, i)
+            time.sleep(1)
+
+        self.log.info("Testing spray pin")
+
+        for i in [1, 0, 1, 0]:
+            self.spray(enable=i)
+            time.sleep(1)

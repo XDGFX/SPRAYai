@@ -13,3 +13,6 @@ redis==3.5.3
 requests==2.25.1
 urllib3==1.26.3
 picamera==1.13
+colorzero==2.0
+gpiozero==1.6.2
+RPi.GPIO==0.7.0
