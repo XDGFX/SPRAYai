@@ -8,10 +8,8 @@ greenlet==1.0.0
 itsdangerous==1.1.0
 Jinja2==2.11.3
 MarkupSafe==1.1.1
-pkg-resources==0.0.0
 python-engineio==4.0.0
 python-socketio==5.0.4
 redis==3.5.3
 six==1.15.0
 Werkzeug==1.0.1
-nodeenv==1.5.0

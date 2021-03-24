@@ -1,0 +1,16 @@
+.vscode
+*.rdb
+.env
+.venv
+.venv-linux
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+instance/
+.webassets-cache
+__pycache__/
+*.py[cod]
+*$py.class
+app/settings.json
