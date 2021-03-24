@@ -80,6 +80,15 @@ def spray_enable():
 
 
 @sio.event(namespace='/pi')
+def spray_enable_blanket():
+    try:
+        s.start_spraying_blanket()
+    except NameError:
+        log.error(
+            'A spray request was received before the device has been registered. Wait a few seconds and try again.')
+
+
+@sio.event(namespace='/pi')
 def spray_disable():
     try:
         s.stop_spraying()
@@ -93,7 +102,13 @@ def ping():
     sio.emit('pong', namespace='/pi')
 
 
+@sio.event(namespace='/pi')
+def system_test():
+    s.servo.system_test()
+
 # --- MAIN FUNCTIONS ---
+
+
 def connect_to_host():
     """
     Attempt to connect to the host device.
@@ -263,6 +278,9 @@ def disconnect_clean():
 
     log.info('Disconnecting Arduino')
     s.servo.a.shutdown()
+
+    log.info('Disconnecting RPi GPIO')
+    s.servo.pi_spray.close()
 
     # Ensure everything is closed properly
     time.sleep(2)

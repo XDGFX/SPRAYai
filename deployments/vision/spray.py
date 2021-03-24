@@ -41,8 +41,8 @@ class Spray():
         self.servo = vision.Servo(
             sid=sid,
             log=log,
-            img_width=self.cam.cam.resolution[0],
-            img_height=self.cam.cam.resolution[1]
+            # img_width=self.cam.cam.resolution[0],
+            # img_height=self.cam.cam.resolution[1]
         )
 
     def start_spraying(self):
@@ -193,6 +193,23 @@ class Spray():
         # Wait for track thread to terminate
         t_track.join()
 
+    def start_spraying_blanket(self):
+        """
+        Enable the spray solenoid and return.
+        """
+        # Check if already spraying
+        if len(spray_queue.queue):
+            self.log.info('Already spraying!')
+            return
+
+        self.stop_spraying()
+
+        # Put something in the queue to trigger spraying
+        spray_queue.put(True)
+
+        log.info("Blanket spraying...")
+        self.servo.spray(enable=True)
+
     def stop_spraying(self):
         """
         Stop spraying immediately.
@@ -202,6 +219,9 @@ class Spray():
             # Clear spray queue
             with spray_queue.mutex:
                 spray_queue.queue.clear()
+
+            # Ensure spraying is not active
+            self.servo.spray(enable=False)
 
             self.log.info('Spraying disabled')
         else:
