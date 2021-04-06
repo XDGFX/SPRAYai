@@ -11,6 +11,7 @@ Callum Morrison, 2021
 import os
 import socket
 import time
+import traceback
 from pathlib import Path
 
 import socketio
@@ -34,27 +35,32 @@ sio = socketio.Client()
 def connect():
     sid = sio.get_sid(namespace='/pi')
 
-    # Attach Redis to log handler
-    global log
-    log = logs.append_redis(log, redis_key=socket.gethostname())
+    # Any errors here are fatal
+    try:
+        # Attach Redis to log handler
+        global log
+        log = logs.append_redis(log, redis_key=socket.gethostname())
 
-    log.info("Connected to host!")
+        log.info("Connected to host!")
 
-    global s
-    s = spray.Spray(sid=sid, log=log)
+        global s
+        s = spray.Spray(sid=sid, log=log)
 
-    client = {
-        "sid": sid,
-        "hostname": socket.gethostname(),
-        "addr": get_ip(),
-        "conn_time": round(time.time()),
-        "latency": -1
-    }
+        client = {
+            "sid": sid,
+            "hostname": socket.gethostname(),
+            "addr": get_ip(),
+            "conn_time": round(time.time()),
+            "latency": -1
+        }
 
-    log.info(client)
+        log.info(client)
 
-    # Register this client with the host
-    sio.emit("register_client", client, namespace='/pi')
+        # Register this client with the host
+        sio.emit("register_client", client, namespace='/pi')
+    except Exception:
+        log.fatal(traceback.format_exc())
+        raise SystemExit
 
 
 @sio.event(namespace='/pi')
@@ -277,7 +283,7 @@ def disconnect_clean():
     s.cam.cam.close()
 
     log.info('Disconnecting Arduino')
-    s.servo.a.shutdown()
+    s.servo.a.exit()
 
     log.info('Disconnecting RPi GPIO')
     s.servo.pi_spray.close()
