@@ -16,13 +16,13 @@ from queue import Queue
 
 import cv2
 import numpy as np
+import pyfirmata
 import redis
 import requests
 from dotenv import load_dotenv
 from gpiozero import DigitalOutputDevice
 from picamera import PiCamera
 from picamera.array import PiRGBArray
-from pymata4 import pymata4
 
 import util
 
@@ -35,7 +35,7 @@ host_url = re.search('([\d.]+):',
                      os.environ.get('HOST_URL')).groups()[0]
 r = redis.Redis(host=host_url, port='6379', db=0)
 
-inference_url = 'http://' + host_url + ':5040'
+inference_url = 'http://' + host_url + ':5050'
 
 
 class Camera():
@@ -117,6 +117,9 @@ class Camera():
         """
         self.track_err_count = 0
 
+        # Debug
+        file_inc = 0
+
         while self.active:
             # Make sure queue doesn't get too long
             queue_length = len(self.frame_buffer.queue)
@@ -184,6 +187,11 @@ class Camera():
             except Exception as e:
                 self.log.debug('Failed to calculate transformation', e)
                 self.track_err_count += 1
+
+            while os.path.exists(f"output_{file_inc}.jpg"):
+                file_inc += 1
+
+            cv2.imwrite(f"output_{file_inc}.jpg", new_frame)
 
     def get_inference(self, img):
         """
@@ -273,10 +281,25 @@ class Servo():
         self.img_height = img_height
 
         # Arduino setup
-        self.a = pymata4.Pymata4(com_port='/dev/ttyS0', baud_rate=57600)
-        self.servo_pin_x = 9
-        self.servo_pin_y = 10
-        self.spray_pin = 5
+        log.info("Connecting to Arduino...")
+        self.a = pyfirmata.Arduino('/dev/ttyS0')
+
+        # Start iterator thread so serial buffer doesn't overflow
+        iter8 = pyfirmata.util.Iterator(self.a)
+        iter8.start()
+
+        # Assign pins
+        self.servo_x = self.a.get_pin('d:9:s')
+        self.servo_y = self.a.get_pin('d:10:s')
+        self.spray_pin = self.a.get_pin('d:5:o')
+
+        # Reference for servo control
+        self.servo_x_max = 90
+        self.servo_y_max = 60
+        self.servo_x_rest = self.servo_x_max / 2
+        self.servo_y_rest = self.servo_y_max / 2
+
+        log.info("Connected to Arduino and pins configured")
 
         # Alternative RPi spray pin setup
         self.pi_spray = DigitalOutputDevice(
@@ -284,23 +307,31 @@ class Servo():
 
         # Servo parameters
         self.spray_per_plant = float(util.get_setting(
-            'SPRAY_PER_PLANT')) or 0.25     # seconds
+            'SPRAY_PER_PLANT'))  # seconds
         self.spray_total_time = float(util.get_setting(
-            'SPRAY_TOTAL_TIME')) or 3       # seconds
+            'SPRAY_TOTAL_TIME'))  # seconds
         self.spray_angle_rate = float(util.get_setting(
-            'SPRAY_ANGLE_RATE')) or 240     # degrees per second
+            'SPRAY_ANGLE_RATE'))  # degrees per second
 
         # Multiplier to get from distance to angle, may change this to tan(angle) = dist / height
         self.spray_dist2angle = float(util.get_setting(
-            'SPRAY_DIST2ANGLE')) or 5
+            'SPRAY_DIST2ANGLE'))
 
-        # Setup Arduino output and set to vertical
-        for pin in [self.servo_pin_x, self.servo_pin_y]:
-            self.a.set_pin_mode_servo(pin)
-            self.a.servo_write(pin, 90)
-            time.sleep(90 / self.spray_angle_rate)
+        # Set default servo positions
+        time.sleep(1)
+        self.servo_x.write(self.servo_x_rest)
+        self.servo_y.write(self.servo_y_rest)
 
-        self.a.set_pin_mode_digital_output(self.spray_pin)
+    def clamp_servo(self, val, servo):
+        """
+        Clamp a servo input to be within it's allowed limits.
+
+        val:    value in degrees
+        servo:  servo in ['x', 'y']
+        """
+        assert servo in ['x', 'y']
+
+        return max(min((self.servo_x_max if servo == 'x' else self.servo_y_max), val), 0)
 
     def goto_point(self, point, prev_point=(0, 0)):
         """
@@ -316,10 +347,10 @@ class Servo():
         wait_time = dist * self.spray_dist2angle / self.spray_angle_rate
 
         # Move nozzle to position
-        self.a.servo_write(self.servo_pin_x, int(
-            point[0] * self.spray_dist2angle + 90))
-        self.a.servo_write(self.servo_pin_y, int(
-            point[1] * self.spray_dist2angle + 90))
+        self.servo_x.write(self.clamp_servo(
+            point[0] * self.spray_dist2angle + self.servo_x_rest, 'x'))
+        self.servo_y.write(self.clamp_servo(
+            point[1] * self.spray_dist2angle + self.servo_y_rest, 'y'))
 
         time.sleep(wait_time)
 
@@ -327,7 +358,7 @@ class Servo():
         """
         Enable or disable the spray nozzle.
         """
-        self.a.digital_pin_write(self.spray_pin, enable)
+        self.spray_pin.write(enable)
 
         if enable:
             self.pi_spray.on()
@@ -472,10 +503,13 @@ class Servo():
         """
         self.log.info("Testing servos")
 
-        for i in [45, 20, 70, 45]:
-            self.a.servo_write(self.servo_pin_x, i)
-            self.a.servo_write(self.servo_pin_y, i)
+        for i in [45, 20, 60, 45]:
+            self.servo_x.write(i)
+            self.servo_y.write(i)
             time.sleep(1)
+
+        self.servo_x.write(self.servo_x_rest)
+        self.servo_y.write(self.servo_y_rest)
 
         self.log.info("Testing spray pin")
 
