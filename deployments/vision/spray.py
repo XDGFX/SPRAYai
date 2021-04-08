@@ -41,8 +41,8 @@ class Spray():
         self.servo = vision.Servo(
             sid=sid,
             log=log,
-            # img_width=self.cam.cam.resolution[0],
-            # img_height=self.cam.cam.resolution[1]
+            img_width=self.cam.cam.resolution[0],
+            img_height=self.cam.cam.resolution[1]
         )
 
     def start_spraying(self):
@@ -65,11 +65,11 @@ class Spray():
         inference_wait = 1 / float(util.get_setting('FRAMERATE_INFERENCE'))
 
         # Enable frame capture
-        t_cap = Thread(target=self.cam.start_capture)
+        t_cap = Thread(target=self.cam.start_capture, args=(spray_queue,))
         t_cap.start()
 
         # Start tracking movement
-        t_track = Thread(target=self.cam.start_track)
+        t_track = Thread(target=self.cam.start_track, args=(spray_queue,))
         t_track.start()
 
         prev_point = (0, 0)
@@ -79,11 +79,10 @@ class Spray():
         if util.get_setting('DEBUG_TRACK'):
             import shutil
 
-            for path in ['original', 'corrected']:
-                if os.path.isdir(path):
-                    shutil.rmtree(path)
-
-                os.mkdir(path)
+            for path in ['original', 'corrected', 'motion', 'raw']:
+                if not os.path.isdir(path):
+                    # shutil.rmtree(path)
+                    os.mkdir(path)
 
             frame_count = 0
 
@@ -106,6 +105,30 @@ class Spray():
             if bbox is None:
                 continue
 
+            if str(util.get_setting('DEBUG_TRACK')).lower() in ['true', 't', '1']:
+                # Save frames for debugging
+                while os.path.isfile(f'original/{frame_count:04}.jpg'):
+                    frame_count += 1
+
+                self.log.debug(f'Saving frame: {frame_count}')
+
+                if bbox['count'] == 0:
+                    self.cam.write_image(self.cam.first_frame,
+                                         f'original/{frame_count:04}.jpg')
+                else:
+                    original_inference = self.cam.draw_bounding_boxes(
+                        self.cam.first_frame, bbox)
+                    bbox = self.servo.correct_bbox(bbox)
+                    corrected_inference = self.cam.draw_bounding_boxes(
+                        self.cam.frame_buffer.get(), bbox)
+
+                    self.cam.write_image(original_inference,
+                                         f'original/{frame_count:04}.jpg')
+                    self.cam.write_image(corrected_inference,
+                                         f'corrected/{frame_count:04}.jpg')
+
+                frame_count += 1
+
             # Check if any detections were made
             if bbox['count'] == 0:
                 self.log.debug(
@@ -118,21 +141,6 @@ class Spray():
                 continue
 
             self.log.info(bbox)
-
-            if util.get_setting('DEBUG_TRACK').lower() in ['true', 't', '1']:
-                # Save frames for debugging
-                original_inference = self.cam.draw_bounding_boxes(
-                    self.cam.first_frame, bbox)
-                bbox = self.servo.correct_bbox(bbox)
-                corrected_inference = self.cam.draw_bounding_boxes(
-                    self.cam.frame_buffer.get(), bbox)
-
-                self.cam.write_image(original_inference,
-                                     f'original/{frame_count:04}.jpg')
-                self.cam.write_image(corrected_inference,
-                                     f'corrected/{frame_count:04}.jpg')
-
-                frame_count += 1
 
             # Convert bounding boxes to centre points to spray
             original_points = [self.servo.bbox2centre(

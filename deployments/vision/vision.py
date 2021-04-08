@@ -71,18 +71,18 @@ class Camera():
 
         r.set(self.movement_key, json.dumps((0, 0, 0)))
 
-    def start_capture(self):
+    def start_capture(self, spray_queue):
         """
         Start scheduled capture from the camera at a defined framerate.
         """
         self.log.info('Starting frame capture.')
 
-        self.active = True
-
         start_time = time.time()
         frame_wait = 1 / int(util.get_setting('FRAMERATE_TRACK'))
 
-        while self.active:
+        frame_count = 0
+
+        while len(spray_queue.queue):
             # Capture frame
             self.cam.capture(self.raw_cap, format='bgr')
             frame = self.raw_cap.array
@@ -108,19 +108,26 @@ class Camera():
             else:
                 self.frame_buffer.put(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
 
+            if str(util.get_setting('DEBUG_TRACK')).lower() in ['true', 't', '1']:
+                while os.path.isfile(f'raw/{frame_count:04}.jpg'):
+                    frame_count += 1
+
+                self.write_image(frame, f'raw/{frame_count:04}.jpg')
+                frame_count += 1
+
             # Wait until next frame should be captured
             time.sleep(frame_wait - ((time.time() - start_time) % frame_wait))
 
-    def start_track(self):
+    def start_track(self, spray_queue):
         """
         Track movement between each frame in the frame buffer using Lucas-Kanade Optical Flow.
         """
         self.track_err_count = 0
 
-        # Debug
-        file_inc = 0
+        frame_count = 0
+        colours = np.random.randint(0, 255, (100, 3))
 
-        while self.active:
+        while len(spray_queue.queue):
             # Make sure queue doesn't get too long
             queue_length = len(self.frame_buffer.queue)
             if queue_length > int(util.get_setting('FRAMERATE_TRACK')):
@@ -161,37 +168,56 @@ class Camera():
             new_pts = new_pts[idx]
 
             try:
-                # Find transformation matrix
-                m = cv2.estimateAffinePartial2D(
-                    prev_pts, new_pts)
+                # Save frames for debugging
+                if str(util.get_setting('DEBUG_TRACK')).lower() in ['true', 't', '1']:
+                    debug_frame = new_frame
 
-                # Extract traslation
-                dx = m[0][0][2]
-                dy = m[0][1][2]
+                    mask = np.zeros_like(prev_frame)
 
-                # Extract rotation angle
-                da = np.arctan2(m[0][1][0], m[0][0][0])
+                    for i, (new, old) in enumerate(zip(new_pts, prev_pts)):
+                        a, b = new.ravel()
+                        c, d = old.ravel()
 
-                # self.log.debug(
-                #     f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
+                        mask = cv2.line(mask, (a, b), (c, d),
+                                        colours[i].tolist(), 2)
+                        debug_frame = cv2.circle(
+                            debug_frame, (a, b), 5, colours[i].tolist(), -1)
+                    debug_frame = cv2.add(debug_frame, mask)
 
-                old_movement = json.loads(r.get(self.movement_key))
-                new_pos = tuple(
-                    map(lambda i, j: i + j, old_movement, (dx, dy, da)))
+                    while os.path.isfile(f'motion/{frame_count:04}.jpg'):
+                        frame_count += 1
 
-                r.set(self.movement_key, json.dumps(new_pos))
+                    self.write_image(debug_frame,
+                                     f'motion/{frame_count:04}.jpg')
 
-                self.track_err_count = 0
-                self.prev_frame = new_frame
+                    frame_count += 1
+
+                    # Find transformation matrix
+                    m = cv2.estimateAffinePartial2D(
+                        prev_pts, new_pts)
+
+                    # Extract traslation
+                    dx = m[0][0][2]
+                    dy = m[0][1][2]
+
+                    # Extract rotation angle
+                    da = np.arctan2(m[0][1][0], m[0][0][0])
+
+                    # self.log.debug(
+                    #     f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
+
+                    old_movement = json.loads(r.get(self.movement_key))
+                    new_pos = tuple(
+                        map(lambda i, j: i + j, old_movement, (dx, dy, da)))
+
+                    r.set(self.movement_key, json.dumps(new_pos))
+
+                    self.track_err_count = 0
+                    self.prev_frame = new_frame
 
             except Exception as e:
                 self.log.debug('Failed to calculate transformation', e)
                 self.track_err_count += 1
-
-            while os.path.exists(f"output_{file_inc}.jpg"):
-                file_inc += 1
-
-            cv2.imwrite(f"output_{file_inc}.jpg", new_frame)
 
     def get_inference(self, img):
         """
