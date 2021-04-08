@@ -97,10 +97,16 @@
                         <div class="column">
                             <div class="columns">
                                 <div class="field column">
+
                                     <input class="is-checkradio" id="setting_{{ setting['key'] }}" type="checkbox"
                                         name="setting_{{ setting['key'] }}" {% if setting['value'] %} checked="checked"
                                         {% endif %}>
                                     <label for="setting_{{ setting['key'] }}">Enabled</label>
+
+                                    <!-- Hidden input with 'false' value which is only sent if the checkbox is unchecked -->
+                                    <input id="setting_{{ setting['key'] }}_hidden" type="hidden" value="off"
+                                        name="setting_{{ setting['key'] }}">
+
                                 </div>
                                 <div class="column">
 
