@@ -16,13 +16,13 @@ from queue import Queue
 
 import cv2
 import numpy as np
+import pyfirmata
 import redis
 import requests
 from dotenv import load_dotenv
 from gpiozero import DigitalOutputDevice
 from picamera import PiCamera
 from picamera.array import PiRGBArray
-from pymata4 import pymata4
 
 import util
 
@@ -35,7 +35,7 @@ host_url = re.search('([\d.]+):',
                      os.environ.get('HOST_URL')).groups()[0]
 r = redis.Redis(host=host_url, port='6379', db=0)
 
-inference_url = 'http://' + host_url + ':5040'
+inference_url = 'http://' + host_url + ':5050'
 
 
 class Camera():
@@ -71,18 +71,18 @@ class Camera():
 
         r.set(self.movement_key, json.dumps((0, 0, 0)))
 
-    def start_capture(self):
+    def start_capture(self, spray_queue):
         """
         Start scheduled capture from the camera at a defined framerate.
         """
         self.log.info('Starting frame capture.')
 
-        self.active = True
-
         start_time = time.time()
         frame_wait = 1 / int(util.get_setting('FRAMERATE_TRACK'))
 
-        while self.active:
+        frame_count = 0
+
+        while len(spray_queue.queue):
             # Capture frame
             self.cam.capture(self.raw_cap, format='bgr')
             frame = self.raw_cap.array
@@ -108,16 +108,26 @@ class Camera():
             else:
                 self.frame_buffer.put(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
 
+            if str(util.get_setting('DEBUG_TRACK')).lower() in ['true', 't', '1']:
+                while os.path.isfile(f'raw/{frame_count:04}.jpg'):
+                    frame_count += 1
+
+                self.write_image(frame, f'raw/{frame_count:04}.jpg')
+                frame_count += 1
+
             # Wait until next frame should be captured
             time.sleep(frame_wait - ((time.time() - start_time) % frame_wait))
 
-    def start_track(self):
+    def start_track(self, spray_queue):
         """
         Track movement between each frame in the frame buffer using Lucas-Kanade Optical Flow.
         """
         self.track_err_count = 0
 
-        while self.active:
+        frame_count = 0
+        colours = np.random.randint(0, 255, (100, 3))
+
+        while len(spray_queue.queue):
             # Make sure queue doesn't get too long
             queue_length = len(self.frame_buffer.queue)
             if queue_length > int(util.get_setting('FRAMERATE_TRACK')):
@@ -158,28 +168,52 @@ class Camera():
             new_pts = new_pts[idx]
 
             try:
-                # Find transformation matrix
-                m = cv2.estimateAffinePartial2D(
-                    prev_pts, new_pts)
+                # Save frames for debugging
+                if str(util.get_setting('DEBUG_TRACK')).lower() in ['true', 't', '1']:
+                    debug_frame = new_frame
 
-                # Extract traslation
-                dx = m[0][0][2]
-                dy = m[0][1][2]
+                    mask = np.zeros_like(prev_frame)
 
-                # Extract rotation angle
-                da = np.arctan2(m[0][1][0], m[0][0][0])
+                    for i, (new, old) in enumerate(zip(new_pts, prev_pts)):
+                        a, b = new.ravel()
+                        c, d = old.ravel()
 
-                # self.log.debug(
-                #     f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
+                        mask = cv2.line(mask, (a, b), (c, d),
+                                        colours[i].tolist(), 2)
+                        debug_frame = cv2.circle(
+                            debug_frame, (a, b), 5, colours[i].tolist(), -1)
+                    debug_frame = cv2.add(debug_frame, mask)
 
-                old_movement = json.loads(r.get(self.movement_key))
-                new_pos = tuple(
-                    map(lambda i, j: i + j, old_movement, (dx, dy, da)))
+                    while os.path.isfile(f'motion/{frame_count:04}.jpg'):
+                        frame_count += 1
 
-                r.set(self.movement_key, json.dumps(new_pos))
+                    self.write_image(debug_frame,
+                                     f'motion/{frame_count:04}.jpg')
 
-                self.track_err_count = 0
-                self.prev_frame = new_frame
+                    frame_count += 1
+
+                    # Find transformation matrix
+                    m = cv2.estimateAffinePartial2D(
+                        prev_pts, new_pts)
+
+                    # Extract traslation
+                    dx = m[0][0][2]
+                    dy = m[0][1][2]
+
+                    # Extract rotation angle
+                    da = np.arctan2(m[0][1][0], m[0][0][0])
+
+                    # self.log.debug(
+                    #     f'Movement: {dx:5.2f}:{dy:5.2f}:{da:5.2f}')
+
+                    old_movement = json.loads(r.get(self.movement_key))
+                    new_pos = tuple(
+                        map(lambda i, j: i + j, old_movement, (dx, dy, da)))
+
+                    r.set(self.movement_key, json.dumps(new_pos))
+
+                    self.track_err_count = 0
+                    self.prev_frame = new_frame
 
             except Exception as e:
                 self.log.debug('Failed to calculate transformation', e)
@@ -273,10 +307,25 @@ class Servo():
         self.img_height = img_height
 
         # Arduino setup
-        self.a = pymata4.Pymata4(com_port='/dev/ttyS0', baud_rate=57600)
-        self.servo_pin_x = 9
-        self.servo_pin_y = 10
-        self.spray_pin = 5
+        log.info("Connecting to Arduino...")
+        self.a = pyfirmata.Arduino('/dev/ttyS0')
+
+        # Start iterator thread so serial buffer doesn't overflow
+        iter8 = pyfirmata.util.Iterator(self.a)
+        iter8.start()
+
+        # Assign pins
+        self.servo_x = self.a.get_pin('d:9:s')
+        self.servo_y = self.a.get_pin('d:10:s')
+        self.spray_pin = self.a.get_pin('d:5:o')
+
+        # Reference for servo control
+        self.servo_x_max = 90
+        self.servo_y_max = 60
+        self.servo_x_rest = self.servo_x_max / 2
+        self.servo_y_rest = self.servo_y_max / 2
+
+        log.info("Connected to Arduino and pins configured")
 
         # Alternative RPi spray pin setup
         self.pi_spray = DigitalOutputDevice(
@@ -284,23 +333,31 @@ class Servo():
 
         # Servo parameters
         self.spray_per_plant = float(util.get_setting(
-            'SPRAY_PER_PLANT')) or 0.25     # seconds
+            'SPRAY_PER_PLANT'))  # seconds
         self.spray_total_time = float(util.get_setting(
-            'SPRAY_TOTAL_TIME')) or 3       # seconds
+            'SPRAY_TOTAL_TIME'))  # seconds
         self.spray_angle_rate = float(util.get_setting(
-            'SPRAY_ANGLE_RATE')) or 240     # degrees per second
+            'SPRAY_ANGLE_RATE'))  # degrees per second
 
         # Multiplier to get from distance to angle, may change this to tan(angle) = dist / height
         self.spray_dist2angle = float(util.get_setting(
-            'SPRAY_DIST2ANGLE')) or 5
+            'SPRAY_DIST2ANGLE'))
 
-        # Setup Arduino output and set to vertical
-        for pin in [self.servo_pin_x, self.servo_pin_y]:
-            self.a.set_pin_mode_servo(pin)
-            self.a.servo_write(pin, 90)
-            time.sleep(90 / self.spray_angle_rate)
+        # Set default servo positions
+        time.sleep(1)
+        self.servo_x.write(self.servo_x_rest)
+        self.servo_y.write(self.servo_y_rest)
 
-        self.a.set_pin_mode_digital_output(self.spray_pin)
+    def clamp_servo(self, val, servo):
+        """
+        Clamp a servo input to be within it's allowed limits.
+
+        val:    value in degrees
+        servo:  servo in ['x', 'y']
+        """
+        assert servo in ['x', 'y']
+
+        return max(min((self.servo_x_max if servo == 'x' else self.servo_y_max), val), 0)
 
     def goto_point(self, point, prev_point=(0, 0)):
         """
@@ -316,10 +373,10 @@ class Servo():
         wait_time = dist * self.spray_dist2angle / self.spray_angle_rate
 
         # Move nozzle to position
-        self.a.servo_write(self.servo_pin_x, int(
-            point[0] * self.spray_dist2angle + 90))
-        self.a.servo_write(self.servo_pin_y, int(
-            point[1] * self.spray_dist2angle + 90))
+        self.servo_x.write(self.clamp_servo(
+            point[0] * self.spray_dist2angle + self.servo_x_rest, 'x'))
+        self.servo_y.write(self.clamp_servo(
+            point[1] * self.spray_dist2angle + self.servo_y_rest, 'y'))
 
         time.sleep(wait_time)
 
@@ -327,7 +384,7 @@ class Servo():
         """
         Enable or disable the spray nozzle.
         """
-        self.a.digital_pin_write(self.spray_pin, enable)
+        self.spray_pin.write(enable)
 
         if enable:
             self.pi_spray.on()
@@ -472,10 +529,13 @@ class Servo():
         """
         self.log.info("Testing servos")
 
-        for i in [45, 20, 70, 45]:
-            self.a.servo_write(self.servo_pin_x, i)
-            self.a.servo_write(self.servo_pin_y, i)
+        for i in [45, 20, 60, 45]:
+            self.servo_x.write(i)
+            self.servo_y.write(i)
             time.sleep(1)
+
+        self.servo_x.write(self.servo_x_rest)
+        self.servo_y.write(self.servo_y_rest)
 
         self.log.info("Testing spray pin")
 

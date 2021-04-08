@@ -147,3 +147,7 @@ datasets/
 
 */SPRAYai
 settings.json
+**/corrected/
+**/motion/
+**/original/
+**/raw/

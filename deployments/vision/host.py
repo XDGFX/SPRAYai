@@ -294,7 +294,7 @@ def disconnect_clean():
     s.cam.cam.close()
 
     log.info('Disconnecting Arduino')
-    s.servo.a.shutdown()
+    s.servo.a.exit()
 
     log.info('Disconnecting RPi GPIO')
     s.servo.pi_spray.close()
