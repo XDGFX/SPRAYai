@@ -121,10 +121,14 @@ def route_settings():
         if cancel:
             return redirect('/')
 
+        log.info("Received updated settings")
+
         new_settings = {}
 
         for setting, value in request.form.items():
             if setting.startswith('setting_') and value:
+                log.debug(f"{setting[len('setting_'):].upper()} == {value.upper()}")
+                
                 # Convert to correct format
                 new_settings[setting[len('setting_'):].upper()] = value.upper()
 
