@@ -374,9 +374,9 @@ class Servo():
 
         # Move nozzle to position
         self.servo_x.write(self.clamp_servo(
-            point[0] * self.spray_dist2angle + self.servo_x_rest, 'x'))
+            point[0] * self.spray_dist2angle * 0.5 + self.servo_x_rest, 'x'))
         self.servo_y.write(self.clamp_servo(
-            point[1] * self.spray_dist2angle + self.servo_y_rest, 'y'))
+            -point[1] * self.spray_dist2angle + self.servo_y_rest + 30, 'y'))
 
         time.sleep(wait_time)
 
